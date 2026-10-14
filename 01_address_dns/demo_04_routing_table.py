@@ -158,7 +158,7 @@ def main() -> None:
             matches.append((net.prefixlen, net, r))
 
     if matches:
-        matches.sort(reverse=True)          # 前缀最长的排最前
+        matches.sort(key=lambda item: item[0], reverse=True)   # 只按前缀长度排, 避免去比 dict
         for prefixlen, net, r in matches:
             print(f"  /{prefixlen:<3} {str(net):<20} 出口 {r['netif']:<6} 网关列={r['gateway']:<16} 标志={r['flags']}")
         _, best_net, best_r = matches[0]
