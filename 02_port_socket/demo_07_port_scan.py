@@ -166,11 +166,37 @@ def main() -> None:
 """)
     if other:
         print(f"  出现的其他结果: {other}（比如 filtered 表示包被丢弃）\n")
+    print("""  注意: 范围扫描 1-1024 在本机上大概率一个开放端口都没有, 因为
+  macOS 的系统服务都用高位端口。真实扫描很少真的去扫 1-65535,
+  而是先扫「常见端口清单」, 下面就是这种做法。\n""")
 
     # ---------------------------------------------------------------- 第 3 步
-    title("第 3 步：给开放端口做一次「服务识别」")
+    title("第 3 步：换成「常见端口清单」再扫一次（真实扫描器的做法）")
 
-    for port in opened[:6]:
+    common_ports = [22, 53, 80, 123, 443, 1100, 3000, 3306, 5000, 5432,
+                    6379, 7000, 8000, 8080, 8888, 9000, 27017]
+    targets = sorted(set(common_ports) | {open_port})      # 把自己起的测试服务也放进去
+    found: list[int] = []
+    start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=32) as pool:
+        for port, result in pool.map(lambda p: probe_port(TARGET, p), targets):
+            if result == "open":
+                found.append(port)
+    print(f"  扫了 {len(targets)} 个常见端口, 耗时 {time.perf_counter() - start:.2f} 秒")
+    print(f"  开放的端口（含我们刚起的 {open_port}）: {found}")
+    print("""
+  这个列表就是各种扫描器默认字典的雏形: 22(SSH) 80/443(Web) 3306(MySQL)
+  5432(Postgres) 6379(Redis) 27017(Mongo) 5000/7000(macOS 系统服务) ...
+  实战经验: 先扫字典（秒级拿到结论）, 再根据需要扩大范围。
+  反过来说, 作为服务提供方, 你应该定期扫自己的机器, 看有没有多余的监听。
+""")
+
+    # ---------------------------------------------------------------- 第 4 步
+    title("第 4 步：给开放端口做一次「服务识别」")
+
+    if not found:
+        print("  （本机没扫到开放端口, 跳过）")
+    for port in found[:8]:
         banner = grab_banner(TARGET, port)
         print(f"  端口 {port:<6} banner: {banner}")
     print("""
@@ -181,8 +207,8 @@ def main() -> None:
   对我们来说, 记住原理就够了: 协议是「约定的字节序列」, 能对上就是能识别。
 """)
 
-    # ---------------------------------------------------------------- 第 4 步
-    title("第 4 步：扫描器的工程要点（以及为什么别乱扫）")
+    # ---------------------------------------------------------------- 第 5 步
+    title("第 5 步：扫描器的工程要点（以及为什么别乱扫）")
 
     print("""  1. 一定要设超时。不设超时的扫描器遇到 DROP 会永远卡住。
   2. 一定要限并发。无限制开线程会把自己机器的 fd 耗尽

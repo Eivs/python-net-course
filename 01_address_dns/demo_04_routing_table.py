@@ -80,6 +80,27 @@ def main() -> None:
             })
     print(f"  （共解析出 {len(routes)} 条 IPv4 路由）")
 
+    # 本机出口 IP (UDP connect 不发包, 只查一次路由表)
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    probe.connect(("1.1.1.1", 80))
+    local_ip = probe.getsockname()[0]
+    probe.close()
+
+    # 只挑出「与我的流量有关」的那几条, 不然 30+ 张网卡的路由表会淹死重点
+    relevant = []
+    for r in routes:
+        if r["dest"] == "default" or "127.0.0.1" in (r["dest"] + r["gateway"]):
+            relevant.append(("关键路由", r))
+            continue
+        try:
+            if ipaddress.ip_address(local_ip) in ipaddress.ip_network(r["dest"], strict=False):
+                relevant.append(("命中本机的路由", r))
+        except ValueError:
+            continue
+    print(f"\n  只看与 192.168.1.10 这类「我的流量」有关的路由（本机出口 IP = {local_ip}）:")
+    for tag, r in relevant:
+        print(f"    [{tag:<8}] {r['dest']:<20} 网关={r['gateway']:<18} 标志={r['flags']:<7} 出口={r['netif']}")
+
     print("\n  逐列解释:")
     print("""    Destination  目标网段。default 表示「其他所有地址」
     Gateway      下一跳。link#14 表示「直连在某张网卡的链路层上, 没有路由器中转」
@@ -138,11 +159,7 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 4 步
     title("第 4 步：最长前缀匹配（为什么明细路由赢）")
 
-    # 先探测本机出口 IP，避免把示例写死在某个网段上
-    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    probe.connect(("1.1.1.1", 80))
-    local_ip = probe.getsockname()[0]
-    probe.close()
+    # 最长前缀匹配（直接用上面探测到的本机出口 IP, 避免写死坐标）
     print(f"  本机出口 IP（探测得到）: {local_ip}")
 
     matches = []

@@ -230,6 +230,8 @@ def main() -> None:
         print(f"  发送中断: {type(exc).__name__}: {exc}")
     finally:
         print(f"  成功 send 了 {len(parts)} 次, 累计 {total} 字节, 每次返回: {parts[:8]}{' ...' if len(parts) > 8 else ''}")
+        print("  （成功次数随内核何时回收缓冲区而波动: 本机多次运行会看到 1~2 次,"
+              "但都远小于这里尝试的 200 次）")
         print("""
   看到没: send 返回 65536 是一次的量, 但缓冲区小的时候它可能只返回一部分。
   所以:

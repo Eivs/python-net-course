@@ -173,8 +173,22 @@ def main() -> None:
 
     arp = run(["/usr/sbin/arp", "-an"]) or run(["arp", "-an"])
     if arp:
-        lines = [ln for ln in arp.splitlines() if ln.strip()][:8]
-        for ln in lines:
+        lines = [ln for ln in arp.splitlines() if ln.strip()]
+        # 先找出默认网关, 再在 ARP 缓存里定位它（网关一定被访问过, 所以一般都在）
+        gateway = ""
+        for ln in run(["/usr/sbin/netstat", "-rn", "-f", "inet"]).splitlines():
+            parts = ln.split()
+            if len(parts) >= 2 and parts[0] == "default":
+                gateway = parts[1]
+                break
+        print(f"  默认网关 = {gateway or '(没读到)'}")
+        hit = [ln for ln in lines if gateway and f"({gateway})" in ln]
+        for ln in hit:
+            print(f"  网关在 ARP 缓存里: {ln.strip()}")
+        if gateway and not hit:
+            print("  （本次未在 ARP 缓存里找到网关条目, 说明还没跟它说过话或者刚过期）")
+        print(f"  当前 ARP 表前 6 条（共 {len(lines)} 条）:")
+        for ln in lines[:6]:
             print(f"  {ln}")
         print("""
   ARP 表 = IP -> MAC 的缓存。发第一个包之前必须先「喊一声」：谁是 192.168.1.1?

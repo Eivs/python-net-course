@@ -248,8 +248,15 @@ def main() -> None:
                 "age": "这份响应在中间缓存里待了多久",
             }.get(key, "")
             print(f"      {key}: {value}" + (f"      <- {note}" if note else ""))
-        print(f"    body 长度: {len(parsed['body'])} 字节（与 Content-Length 相符吗? "
-              f"{len(parsed['body']) == int(parsed['headers'].get('content-length', -1))}）")
+        print(f"    body 长度: {len(parsed['body'])} 字节")
+        length_header = parsed["headers"].get("content-length")
+        if length_header is None:
+            transfer = parsed["headers"].get("transfer-encoding", "(无)")
+            print(f"    注意: 这条响应没有 Content-Length（Transfer-Encoding: {transfer}）,")
+            print("          所以 body 的边界是靠 chunked 分块标记确定的（见下面第 2 步的手写解码）。")
+        else:
+            print(f"    与 Content-Length 对比: 声明 {length_header}, 实收 {len(parsed['body'])} "
+                  f"-> 一致: {int(length_header) == len(parsed['body'])}")
         print("""
   到这里你已经看完了 HTTP 的全貌: 一行状态 + 若干头 + 空行 + body。
   浏览器地址栏敲回车、curl、requests 库, 底层做的都是这件事。
