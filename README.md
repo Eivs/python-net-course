@@ -13,8 +13,10 @@ DNS 报文是手写二进制拼出来的、丢包是在你自己机器上真的�
 TIME_WAIT/CLOSE_WAIT/206/304 都是从内核和真实响应里读出来的。
 
 - **只用标准库**，不需要 `pip install` 任何东西
-- 需要 Python **3.10+**（用了 `X | None` 类型标注）；本套在 Python 3.13 上验证通过
-- 每课都会**自动降级**：没网、没 `openssl`、没 `dig` 时不会崩，会跳过对应实验并说明
+- 需要 Python **3.10+**：代码里用到 `X | None` 类型标注（配 `from __future__ import annotations`），
+  未使用 `match`/`except*`/`type` 语句等 3.11+ 专有语法；**实测环境是 Python 3.13**
+- 每课都会**自动降级**：没网、没 `dig`、没 `openssl`、没 `sysctl` 时不会崩，会跳过对应实验并说明
+  （`DEGRADED=1 bash run_all.sh` 实测 19/19 通过）
 
 ---
 
@@ -29,6 +31,9 @@ bash run_all.sh
 # 只跑某一章
 bash run_all.sh 04_tcp
 
+# 降级模式：把子进程的 PATH 指向空目录, 验证「没有 dig/openssl/sysctl/lsof 时」也能跑
+DEGRADED=1 bash run_all.sh
+
 # 单独跑某一课
 python3 04_tcp/demo_12_tcp_sticky_packet.py
 ```
@@ -42,7 +47,7 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
 | # | 文件 | 你会亲手看到的东西 | 需要公网 |
 |---|------|-------------------|---------|
 | 1 | `01_address_dns/demo_01_ip_address.py` | IP 就是 32 位整数、网络字节序、掩码/子网、回环与私网地址、UDP connect 探测本机 IP | 否 |
-| 2 | `01_address_dns/demo_02_dns_lookup.py` | `getaddrinfo` 全部返回、一个域名多个 IP（CDN）、hosts 文件、缓存让第二次解析快几倍、本机 DNS 服务器 | 是 |
+| 2 | `01_address_dns/demo_02_dns_lookup.py` | `getaddrinfo` 全部返回、一个域名多个 IP（CDN）、hosts 文件、缓存让第二次解析快 30 倍量级（实测 51.9ms → 1.6ms）、本机 DNS 服务器 | 是 |
 | 3 | `01_address_dns/demo_03_local_interfaces.py` | 本机所有网卡、MAC、MTU 1500 怎么推出 MSS 1460、ARP 表 | 否 |
 | 4 | `01_address_dns/demo_04_routing_table.py` | 真实路由表逐列解释、最长前缀匹配、源地址怎么选、`traceroute` 看到真实每一跳 | 是 |
 | 5 | `02_port_socket/demo_05_port_basics.py` | 端口 16 位上限、端口 0 让内核分配、`0.0.0.0` vs `127.0.0.1` 谁连得进来、真实五元组、`netstat` 对照 | 否 |
@@ -93,7 +98,7 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
 | 10 | 把 `listen(1)` 改成 `listen(64)` | 6 次连接全成功，理解 backlog |
 | 11 | 把 1MB 改成 64MB，并把 `recv(4096)` 改成 `recv(1024)` | 观察 recv 次数和耗时 |
 | 12 | 把 `LengthPrefixedDecoder` 的 `max_message_size` 改成 100 | 触发防内存攻击的保护 |
-| 13 | 加 `--wait` 参数运行 | 亲眼看到 30 秒后 TIME_WAIT 消失 |
+| 13 | 加 `--wait` 参数运行 | 亲眼看到 TIME_WAIT 从 25 条变 0（实测 t+30s 时全部消失，正好 2\*MSL） |
 | 14 | 把 32MiB 改成 512MiB | 缓冲区大小对吞吐的影响被放大 |
 | 15 | 把请求里的 `Connection: close` 去掉，连发两次请求 | 一条连接两个响应（keep-alive） |
 | 16 | 加一个 `@server.route("GET", "/time")` 返回当前时间 | 体会路由注册的写法 |
@@ -118,6 +123,22 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
 | `curl` | 第 16/19 课 | 手工验证自己写的 HTTP 服务器 |
 
 **需要公网**的课（离线时不会崩，只是少几段真实数据）：2、4（仅 traceroute 部分）、9、15、17（部分）、18。
+
+---
+
+## 本套课的验证方式（为什么你可以相信里面的数字）
+
+所有结论都来自**运行时的真实输出**，不存在「据说」「通常」。具体做了四件事：
+
+1. **全量回归**：`bash run_all.sh` 一次跑完全部 19 个示例 → 19/19 通过，每个脚本的完整输出都留在 `.logs/`。
+2. **关键数字直接读系统**：MTU/MSS 来自 `getsockopt(TCP_MAXSEG)` 与 `ifconfig`；
+   TIME_WAIT 时长来自 `sysctl net.inet.tcp.msl`；连接建立超时来自 `net.inet.tcp.keepinit`；
+   临时端口范围来自 `net.inet.ip.portrange.*`；端口占用来自 `lsof`/`netstat`。
+3. **可观察的现象真的被观察到**：UDP 丢包 489/500（缓冲区溢出）、粘包 3 次 send → 1 次 recv 拿到 21 字节、
+   CLOSE_WAIT 复现、`listen(1)` 下 6 次连接只成功 1 次、TIME_WAIT 在 t+30s 归零、
+   TLS 证书链 4 张、自签证书四种校验结果各不相同。
+4. **降级路径也要测**：`DEGRADED=1 bash run_all.sh` 把子进程的 `PATH` 指向空目录
+  （等于 dig/openssl/sysctl/lsof 全不存在），确认 19/19 仍然通过、只跳过实验而不报错崩溃。
 
 ---
 

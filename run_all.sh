@@ -4,16 +4,41 @@
 # 用法:
 #   ./run_all.sh              # 跑全部
 #   ./run_all.sh 01           # 只跑 01_ 开头的目录
-#   OFFLINE=1 ./run_all.sh    # 跳过需要公网的示例（本套示例都能离线降级）
+#   DEGRADED=1 ./run_all.sh   # 降级模式: 把子进程的 PATH 指向空目录,
+#                             #   验证「没有 dig/openssl/sysctl/lsof 时」依然不崩
 #
 # 说明: 这套示例只用 Python 标准库，不需要 pip install 任何东西。
+# 注意: 变量展开一律写成 ${VAR} 形式。macOS 自带的是 GNU bash 3.2,
+#       当变量名后面紧跟全角括号这类多字节字符时, 它会把括号也当成变量名的一部分,
+#       在 set -u 下直接以 "unbound variable" 退出（不信可以自己试一下）。
 
 set -u
 cd "$(dirname "$0")" || exit 1
 
-PY="${PYTHON:-python3}"
+# 解析解释器的绝对路径。两个坑:
+#   1) 降级模式下 PATH 会被清空, 所以必须在这里就解析成绝对路径
+#   2) pyenv 的 python3 是个 shim 脚本, 它自己也依赖 PATH;
+#      所以用 sys.executable 拿到真正的解释器二进制路径
+if [ -n "${PYTHON:-}" ]; then
+    PY="$PYTHON"
+else
+    PY="$(python3 -c 'import sys; print(sys.executable)' 2>/dev/null || command -v python3)"
+fi
+if [ -z "$PY" ] || [ ! -x "$PY" ]; then
+    echo "找不到 python3, 用 PYTHON=/path/to/python3 指定"
+    exit 1
+fi
 FILTER="${1:-}"
 mkdir -p .logs
+
+# 子进程用的 PATH: 正常模式用原样, 降级模式用空目录
+if [ "${DEGRADED:-0}" = "1" ]; then
+    mkdir -p .logs/emptybin
+    RUN_PATH="$PWD/.logs/emptybin"
+    echo "[降级模式] 子进程 PATH=${RUN_PATH} (dig/openssl/sysctl/lsof 都不可见)"
+else
+    RUN_PATH="$PATH"
+fi
 
 pass=0
 fail=0
@@ -34,7 +59,7 @@ while IFS= read -r file; do
     log=".logs/${name}.log"
     printf '%-34s ' "$name"
     start=$(date +%s)
-    if "$PY" "$file" >"$log" 2>&1; then
+    if env PATH="$RUN_PATH" "$PY" "$file" >"$log" 2>&1; then
         elapsed=$(( $(date +%s) - start ))
         printf 'OK   (%2ss)  -> %s\n' "$elapsed" "$log"
         pass=$((pass + 1))

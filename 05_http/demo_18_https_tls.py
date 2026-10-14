@@ -138,12 +138,23 @@ def ensure_self_signed_cert() -> tuple[str, str] | None:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as exc:
         print(f"  openssl 执行失败: {exc}")
+        _cleanup_empty_dir()
         return None
     if result.returncode != 0:
         print(f"  生成证书失败: {result.stderr.strip()[:200]}")
+        _cleanup_empty_dir()
         return None
     print(f"  已生成自签证书: {cert_path}")
     return cert_path, key_path
+
+
+def _cleanup_empty_dir() -> None:
+    """生成失败时别留下一个空目录, 否则下次会误以为证书已经存在。"""
+    try:
+        if os.path.isdir(CERT_DIR) and not os.listdir(CERT_DIR):
+            os.rmdir(CERT_DIR)
+    except OSError:
+        pass
 
 
 class TinyHttpsServer:

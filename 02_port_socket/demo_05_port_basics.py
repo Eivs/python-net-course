@@ -42,6 +42,7 @@ demo_05_port_basics.py -- 第 5 课：端口，怎么找到「机器里的那个
 
 from __future__ import annotations
 
+import shutil
 import socket
 import struct
 import subprocess
@@ -56,6 +57,17 @@ def title(text: str) -> None:
     print("=" * 74)
     print(text)
     print("=" * 74)
+
+
+def sysctl_value(name: str) -> str:
+    """读一个 sysctl 值; 工具不存在或读不到就返回空串（示例要能在任何平台/环境下跑）。"""
+    if not shutil.which("sysctl"):
+        return ""
+    try:
+        return subprocess.run(["sysctl", "-n", name], capture_output=True, text=True,
+                              errors="replace", timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 def detect_lan_ip() -> str | None:
@@ -173,10 +185,18 @@ def main() -> None:
     second.bind(("127.0.0.1", 0))
     p1, p2 = first.getsockname()[1], second.getsockname()[1]
     print(f"  连续两次 bind 端口 0 -> 内核给了 {p1} 和 {p2}（一般都在临时端口区间）")
-    print(f"  临时端口范围（macOS sysctl net.inet.ip.portrange.*）:")
-    for key in ["net.inet.ip.portrange.first", "net.inet.ip.portrange.last"]:
-        out = subprocess.run(["sysctl", "-n", key], capture_output=True, text=True).stdout.strip()
-        print(f"    {key} = {out or '(读不到)'}")
+    print("  临时端口范围（macOS: sysctl net.inet.ip.portrange.*；Linux: /proc/sys/net/ipv4/ip_local_port_range）:")
+    range_first = sysctl_value("net.inet.ip.portrange.first")
+    range_last = sysctl_value("net.inet.ip.portrange.last")
+    if range_first and range_last:
+        print(f"    net.inet.ip.portrange.first = {range_first}")
+        print(f"    net.inet.ip.portrange.last  = {range_last}")
+    else:
+        try:
+            with open("/proc/sys/net/ipv4/ip_local_port_range", encoding="utf-8") as fh:
+                print(f"    ip_local_port_range = {fh.read().strip()}")
+        except OSError:
+            print("    （本环境读不到临时端口范围, 跳过；macOS 默认是 49152-65535）")
     print("""
   这就是客户端 connect() 时源端口的来源。内核从这段范围里挑一个「当前没被占用」的,
   用完（连接彻底关闭后）还要等 TIME_WAIT 结束才能复用 -> 第 4 章会看到。

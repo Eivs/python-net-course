@@ -47,6 +47,7 @@ demo_09_dns_query_packet.py -- 第 9 课：亲手拼一个 DNS 报文
 from __future__ import annotations
 
 import random
+import shutil
 import socket
 import struct
 import subprocess
@@ -330,7 +331,7 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 5 步
     title("第 5 步：和 dig 对照（同一个问题, 官方工具的回答）")
 
-    if subprocess.run(["which", "dig"], capture_output=True).returncode == 0:
+    if shutil.which("dig"):
         out = subprocess.run(
             ["dig", f"@{used_server}", "+noall", "+answer", "+comments", domain, "A"],
             capture_output=True, text=True, errors="replace", timeout=10).stdout

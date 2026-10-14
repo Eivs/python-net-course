@@ -32,6 +32,7 @@ demo_02_dns_lookup.py -- 第 2 课：域名怎么变成 IP？（DNS）
 
 from __future__ import annotations
 
+import shutil
 import socket
 import subprocess
 import sys
@@ -190,7 +191,7 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 7 步
     title("第 7 步：我的机器到底在用哪台 DNS 服务器？")
 
-    if subprocess.run(["which", "scutil"], capture_output=True).returncode == 0:
+    if shutil.which("scutil"):
         out = subprocess.run(["scutil", "--dns"], capture_output=True, text=True, errors="replace", timeout=5).stdout
         server_lines = [ln.strip() for ln in out.splitlines() if "nameserver" in ln]
         for ln in server_lines[:10]:
@@ -204,7 +205,7 @@ def main() -> None:
         print("  系统没有 scutil，跳过。")
 
     print("  用 dig 看一次完整的 DNS 交互过程（如果装了 dig）:")
-    if subprocess.run(["which", "dig"], capture_output=True).returncode == 0:
+    if shutil.which("dig"):
         out = subprocess.run(
             ["dig", "+noall", "+answer", "+stats", "example.com", "A"],
             capture_output=True, text=True, errors="replace", timeout=10,

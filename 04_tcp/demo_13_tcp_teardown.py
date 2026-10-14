@@ -77,7 +77,17 @@ def sysctl(name: str) -> str:
         return subprocess.run(["sysctl", "-n", name], capture_output=True, text=True,
                               errors="replace", timeout=5).stdout.strip()
     except (OSError, subprocess.SubprocessError):
-        return "?"
+        return ""
+
+
+def msl_millis() -> int:
+    """读出 MSL（毫秒）。读不到就用 macOS 默认值 15000, 别让示例崩掉。"""
+    raw = sysctl("net.inet.tcp.msl")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        print(f"  （读不到 net.inet.tcp.msl, 按默认 15000ms 计算。原始值: {raw!r}）")
+        return 15000
 
 
 def main() -> None:
@@ -86,7 +96,7 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 1 步
     title("第 1 步：谁关谁负责 —— 观察 TIME_WAIT 的产生")
 
-    msl_ms = int(sysctl("net.inet.tcp.msl") or 15000)
+    msl_ms = msl_millis()
     print(f"  本机 net.inet.tcp.msl = {msl_ms} ms, 所以 TIME_WAIT 会持续 2*MSL = {msl_ms * 2 / 1000:.0f} 秒")
 
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

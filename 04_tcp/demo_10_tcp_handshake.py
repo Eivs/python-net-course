@@ -60,6 +60,14 @@ def title(text: str) -> None:
     print("=" * 74)
 
 
+def sysctl_value(name: str) -> str:
+    try:
+        return subprocess.run(["sysctl", "-n", name], capture_output=True, text=True,
+                              errors="replace", timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 def tcp_lines(port: int) -> list[str]:
     """从 netstat 里筛出与本端口相关的行（用于观察状态）。"""
     try:
@@ -187,9 +195,16 @@ def main() -> None:
     title("第 3 步：连接超时（连不上时到底等了多久）")
 
     print("""  内核在发出 SYN 后如果没收到响应, 会重传 SYN, 每次间隔翻倍:
-      1s, 2s, 4s, 8s, 16s, 32s ... 累计到系统上限（macOS 约 75 秒）才放弃。
+      1s, 2s, 4s, 8s, 16s, 32s ... 累计到系统上限才放弃。
   平时我们绝不会等这么久, 所以要自己设超时:
 """)
+    keepinit = sysctl_value("net.inet.tcp.keepinit")
+    if keepinit:
+        print("  本机实测这个上限:")
+        print(f"    net.inet.tcp.keepinit = {keepinit} ms  -> 连接建立阶段最多等 "
+              f"{int(keepinit) / 1000:.0f} 秒（macOS 用这一个旋钮控制）")
+        print("    Linux 上对应的旋钮叫 net.ipv4.tcp_syn_retries, 默认 6 次重传 ≈ 127 秒")
+        print()
     unreachable = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     unreachable.settimeout(1.0)          # 注意: settimeout 只影响连接建立和数据收发, 不改变内核重传
     start = time.perf_counter()

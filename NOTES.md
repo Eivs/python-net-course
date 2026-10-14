@@ -95,7 +95,8 @@ sequenceDiagram
 
 - 两个包不够（无法确认「对方收到了我的确认」），三个刚好。
 - 握手完成 ≠ 应用层 ready：内核先放进 accept 队列，`accept()` 只是取出来。
-- SYN 重传间隔 1/2/4/8/16/32 秒，macOS 累计约 75 秒才失败 → **业务必须自己设超时**。
+- SYN 重传间隔 1/2/4/8/16/32 秒；macOS 用 `net.inet.tcp.keepinit` 控制上限（本机实测 75000ms = 75 秒），
+  Linux 用 `net.ipv4.tcp_syn_retries`（默认 6 次 ≈ 127 秒）→ **业务必须自己设超时**。
 - backlog 是队列长度，满了会丢 SYN（本机 `listen(1)` 实测 6 次只有 1 次成功）。
 
 **两种失败的区分**（排障关键）：
@@ -334,7 +335,7 @@ curl -v --http1.1 https://example.com/ -o /dev/null
 | 20 / 60 | TCP 头最小 / 最大长度（字节，含选项） |
 | 8 | UDP 头长度（字节） |
 | 2*MSL | TIME_WAIT 时长（macOS MSL=15s → 30s） |
-| 75 秒 | Linux/macOS 默认 SYN 重传总时长 |
+| 75 秒 | macOS 连接建立超时（`net.inet.tcp.keepinit`=75000ms；Linux 默认 SYN 重传 6 次≈127s） |
 | 7200s / 75s / 8 | TCP keepalive 空闲 / 间隔 / 次数（≈2 小时后才判死） |
 | 49152-65535 | macOS 临时端口范围 |
 | 6 | 浏览器对同一域名常见的并行连接数上限（HTTP/1.1 时代） |
