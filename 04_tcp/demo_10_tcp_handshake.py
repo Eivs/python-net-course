@@ -62,8 +62,13 @@ def title(text: str) -> None:
 
 def sysctl_value(name: str) -> str:
     try:
-        return subprocess.run(["sysctl", "-n", name], capture_output=True, text=True,
-                              errors="replace", timeout=5).stdout.strip()
+        return subprocess.run(
+            ["sysctl", "-n", name],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=5,
+        ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -71,11 +76,22 @@ def sysctl_value(name: str) -> str:
 def tcp_lines(port: int) -> list[str]:
     """从 netstat 里筛出与本端口相关的行（用于观察状态）。"""
     try:
-        out = subprocess.run(["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
-                             capture_output=True, text=True, errors="replace", timeout=10).stdout
+        out = subprocess.run(
+            ["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=10,
+        ).stdout
     except (OSError, subprocess.SubprocessError):
         return []
-    return [ln.strip() for ln in out.splitlines() if f".{port} " in ln or f".{port}\t" in ln or ln.rstrip().endswith(f".{port}" )]
+    return [
+        ln.strip()
+        for ln in out.splitlines()
+        if f".{port} " in ln
+        or f".{port}\t" in ln
+        or ln.rstrip().endswith(f".{port}")
+    ]
 
 
 def states_for_port(port: int) -> dict[str, int]:
@@ -83,9 +99,19 @@ def states_for_port(port: int) -> dict[str, int]:
     counter: dict[str, int] = {}
     for ln in tcp_lines(port):
         parts = ln.split()
-        if len(parts) >= 3 and parts[-1] in ("LISTEN", "ESTABLISHED", "SYN_SENT", "SYN_RCVD",
-                                            "FIN_WAIT_1", "FIN_WAIT_2", "CLOSE_WAIT",
-                                            "TIME_WAIT", "CLOSING", "LAST_ACK", "CLOSED"):
+        if len(parts) >= 3 and parts[-1] in (
+            "LISTEN",
+            "ESTABLISHED",
+            "SYN_SENT",
+            "SYN_RCVD",
+            "FIN_WAIT_1",
+            "FIN_WAIT_2",
+            "CLOSE_WAIT",
+            "TIME_WAIT",
+            "CLOSING",
+            "LAST_ACK",
+            "CLOSED",
+        ):
             counter[parts[-1]] = counter.get(parts[-1], 0) + 1
     return counter
 
@@ -103,13 +129,15 @@ def main() -> None:
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(("127.0.0.1", 0))
-        srv.listen(16)                       # listen 之后进入 LISTEN 状态, 内核开始替我们收 SYN
+        srv.listen(16)  # listen 之后进入 LISTEN 状态, 内核开始替我们收 SYN
         holder["port"] = srv.getsockname()[1]
         ready.set()
         srv.settimeout(0.3)
         while not stop.is_set():
             try:
-                conn, peer = srv.accept()    # accept 只是「从内核已有连接队列里取一个」
+                conn, peer = (
+                    srv.accept()
+                )  # accept 只是「从内核已有连接队列里取一个」
                 accepted.put((conn, peer))
             except socket.timeout:
                 continue
@@ -133,7 +161,7 @@ def main() -> None:
     print("  下面尝试连接一个不会有响应的地址, 用来抓住 SYN_SENT 这个瞬间状态:")
     for target in [("192.0.2.1", 80), ("10.255.255.1", 80)]:
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        probe.setblocking(False)             # 非阻塞 connect: 立刻返回, 状态留在内核里
+        probe.setblocking(False)  # 非阻塞 connect: 立刻返回, 状态留在内核里
         try:
             probe.connect_ex(target)
         except OSError as exc:
@@ -148,7 +176,9 @@ def main() -> None:
                 break
             time.sleep(0.1)
         probe.close()
-        print(f"    目标 {str(target):<20} 观察到的状态: {sorted(found) or '(没抓到)'}")
+        print(
+            f"    目标 {str(target):<20} 观察到的状态: {sorted(found) or '(没抓到)'}"
+        )
         if "SYN_SENT" in found:
             print("""      <- 抓到 SYN_SENT: 说明「SYN 已发出、还没收到 SYN+ACK」。
          正常连接时这个状态只存在几毫秒（本地回环上更短）, 所以平时根本看不到。
@@ -160,9 +190,13 @@ def main() -> None:
     client.connect(("127.0.0.1", port))
     time.sleep(0.2)
     conn, peer = accepted.get(timeout=3)
-    print(f"\n  正常连接建立后（客户端 connect 返回即三次握手完成）:")
-    print(f"    客户端视角: 本地端 {client.getsockname()} <-> 对端 {client.getpeername()}")
-    print(f"    服务端视角: 本地端 {conn.getsockname()} <-> 对端 {conn.getpeername()}")
+    print("\n  正常连接建立后（客户端 connect 返回即三次握手完成）:")
+    print(
+        f"    客户端视角: 本地端 {client.getsockname()} <-> 对端 {client.getpeername()}"
+    )
+    print(
+        f"    服务端视角: 本地端 {conn.getsockname()} <-> 对端 {conn.getpeername()}"
+    )
     print(f"    netstat 里端口 {port} 的状态: {states_for_port(port)}")
     print("""
   同一根连接的两个视角是「镜像」的:
@@ -201,23 +235,33 @@ def main() -> None:
     keepinit = sysctl_value("net.inet.tcp.keepinit")
     if keepinit:
         print("  本机实测这个上限:")
-        print(f"    net.inet.tcp.keepinit = {keepinit} ms  -> 连接建立阶段最多等 "
-              f"{int(keepinit) / 1000:.0f} 秒（macOS 用这一个旋钮控制）")
-        print("    Linux 上对应的旋钮叫 net.ipv4.tcp_syn_retries, 默认 6 次重传 ≈ 127 秒")
+        print(
+            f"    net.inet.tcp.keepinit = {keepinit} ms  -> 连接建立阶段最多等 "
+            f"{int(keepinit) / 1000:.0f} 秒（macOS 用这一个旋钮控制）"
+        )
+        print(
+            "    Linux 上对应的旋钮叫 net.ipv4.tcp_syn_retries, 默认 6 次重传 ≈ 127 秒"
+        )
         print()
     unreachable = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    unreachable.settimeout(1.0)          # 注意: settimeout 只影响连接建立和数据收发, 不改变内核重传
+    unreachable.settimeout(
+        1.0
+    )  # 注意: settimeout 只影响连接建立和数据收发, 不改变内核重传
     start = time.perf_counter()
     try:
         unreachable.connect(("192.0.2.1", 80))
         print("  竟然连上了（这个地址理论上不该有服务）")
     except socket.timeout:
-        print(f"  连 192.0.2.1:80 -> socket.timeout（我们自己设的 1 秒到了就放弃, "
-              f"实际等了 {time.perf_counter() - start:.2f}s）")
+        print(
+            f"  连 192.0.2.1:80 -> socket.timeout（我们自己设的 1 秒到了就放弃, "
+            f"实际等了 {time.perf_counter() - start:.2f}s）"
+        )
         print("""      <- 超时异常不是内核放弃, 是你的 timeout 到了。内核可能还在后台重传 SYN,
          所以生产代码里「连接超时」要设得比业务超时更短（常见 1~3 秒）, 并配重试。""")
     except OSError as exc:
-        print(f"  连 192.0.2.1:80 -> {type(exc).__name__}: {exc}（等了 {time.perf_counter() - start:.2f}s）")
+        print(
+            f"  连 192.0.2.1:80 -> {type(exc).__name__}: {exc}（等了 {time.perf_counter() - start:.2f}s）"
+        )
     finally:
         unreachable.close()
 
@@ -225,9 +269,11 @@ def main() -> None:
     refused.settimeout(1.0)
     start = time.perf_counter()
     try:
-        refused.connect(("127.0.0.1", 1))        # 本机 1 号端口没人监听
+        refused.connect(("127.0.0.1", 1))  # 本机 1 号端口没人监听
     except ConnectionRefusedError:
-        print(f"  连 127.0.0.1:1 -> ConnectionRefusedError（只等了 {time.perf_counter() - start:.4f}s）")
+        print(
+            f"  连 127.0.0.1:1 -> ConnectionRefusedError（只等了 {time.perf_counter() - start:.4f}s）"
+        )
         print("""      <- 这是 RST: 对方主机活着, 但那个端口没有监听者, 立刻回一个复位包。
          所以「连接被拒绝」和「连接超时」是两种完全不同的故障:
              拒绝   = 网络通、主机在、端口没人听（或防火墙 reject）
@@ -252,9 +298,11 @@ def main() -> None:
     backlog_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     backlog_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     backlog_server.bind(("127.0.0.1", 0))
-    backlog_server.listen(1)                 # 故意设成最小的 backlog
+    backlog_server.listen(1)  # 故意设成最小的 backlog
     bl_port = backlog_server.getsockname()[1]
-    print(f"  起一个 listen(1) 且「故意不 accept」的服务端: 127.0.0.1:{bl_port}")
+    print(
+        f"  起一个 listen(1) 且「故意不 accept」的服务端: 127.0.0.1:{bl_port}"
+    )
 
     attempts = []
     for i in range(6):
@@ -274,7 +322,9 @@ def main() -> None:
     for n, result in attempts:
         print(f"    第 {n} 次连接: {result}")
     established = sum(1 for _, r in attempts if r.startswith("已建立"))
-    print(f"\n  在 listen(1) 下, 有 {established}/6 次连接成功进入内核队列（本平台实测, 仅供参考）")
+    print(
+        f"\n  在 listen(1) 下, 有 {established}/6 次连接成功进入内核队列（本平台实测, 仅供参考）"
+    )
 
     drained = 0
     backlog_server.settimeout(0.3)
@@ -285,7 +335,9 @@ def main() -> None:
             drained += 1
         except (socket.timeout, OSError):
             break
-    print(f"  之后 accept() 逐个取走, 一共取到 {drained} 个连接（它们一直在队列里等我）")
+    print(
+        f"  之后 accept() 逐个取走, 一共取到 {drained} 个连接（它们一直在队列里等我）"
+    )
     backlog_server.close()
 
     # ---------------------------------------------------------------- 第 5 步

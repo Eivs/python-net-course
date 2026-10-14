@@ -59,7 +59,7 @@ def title(text: str) -> None:
 def hexdump(data: bytes, prefix: str = "    ", limit: int = 512) -> None:
     shown = data[:limit]
     for offset in range(0, len(shown), 16):
-        chunk = shown[offset:offset + 16]
+        chunk = shown[offset : offset + 16]
         hex_part = " ".join(f"{b:02x}" for b in chunk)
         ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
         print(f"{prefix}{offset:04x}  {hex_part:<47}  {ascii_part}")
@@ -110,7 +110,9 @@ class TeachingServer:
                 conn, _ = self.sock.accept()
             except (socket.timeout, OSError):
                 continue
-            threading.Thread(target=self._serve, args=(conn,), daemon=True).start()
+            threading.Thread(
+                target=self._serve, args=(conn,), daemon=True
+            ).start()
 
     def _serve(self, conn: socket.socket) -> None:
         """支持 keep-alive: 一条连接上可以处理多个请求（HTTP/1.1 默认行为）。"""
@@ -125,7 +127,7 @@ class TeachingServer:
                     except (socket.timeout, OSError):
                         return
                     if not chunk:
-                        return                    # 客户端关了
+                        return  # 客户端关了
                     buf += chunk
                 head, _, rest = buf.partition(b"\r\n\r\n")
                 lines = head.decode("iso-8859-1").split("\r\n")
@@ -149,40 +151,57 @@ class TeachingServer:
                 # 3) 路由
                 if method == "POST" and path == "/echo":
                     payload = b"echo:" + body
-                    conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
-                                 + f"Content-Length: {len(payload)}\r\n\r\n".encode()
-                                 + payload)
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                        + f"Content-Length: {len(payload)}\r\n\r\n".encode()
+                        + payload
+                    )
                 elif path == "/fixed":
                     payload = b"fixed-length-body"
-                    conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
-                                 + f"Content-Length: {len(payload)}\r\n\r\n".encode()
-                                 + payload)
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                        + f"Content-Length: {len(payload)}\r\n\r\n".encode()
+                        + payload
+                    )
                 elif path == "/chunked":
                     # 分块传输: 每块前是十六进制长度 + \r\n, 最后用 0 块结束
-                    conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
-                                 b"Transfer-Encoding: chunked\r\n\r\n")
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                        b"Transfer-Encoding: chunked\r\n\r\n"
+                    )
                     for piece in [b"chunk-1;", b"chunk-2;", b"chunk-3"]:
-                        conn.sendall(f"{len(piece):x}\r\n".encode() + piece + b"\r\n")
-                        time.sleep(0.05)          # 故意慢一点, 让你看到"流式"
+                        conn.sendall(
+                            f"{len(piece):x}\r\n".encode() + piece + b"\r\n"
+                        )
+                        time.sleep(0.05)  # 故意慢一点, 让你看到"流式"
                     conn.sendall(b"0\r\n\r\n")
                 elif path == "/close":
                     # HTTP/1.0 风格: 没有长度信息, 靠关闭连接表示结束
-                    conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
-                                 b"Connection: close\r\n\r\n")
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                        b"Connection: close\r\n\r\n"
+                    )
                     conn.sendall(b"body-ends-when-connection-closes")
                     conn.shutdown(socket.SHUT_WR)
                     return
                 elif path == "/redirect":
-                    conn.sendall(b"HTTP/1.1 302 Found\r\nLocation: /fixed\r\n"
-                                 b"Content-Length: 0\r\n\r\n")
+                    conn.sendall(
+                        b"HTTP/1.1 302 Found\r\nLocation: /fixed\r\n"
+                        b"Content-Length: 0\r\n\r\n"
+                    )
                 else:
                     payload = b"not found"
-                    conn.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n"
-                                 + f"Content-Length: {len(payload)}\r\n\r\n".encode()
-                                 + payload)
+                    conn.sendall(
+                        b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n"
+                        + f"Content-Length: {len(payload)}\r\n\r\n".encode()
+                        + payload
+                    )
 
                 # 4) keep-alive 决定要不要继续复用这条连接
-                if version == "HTTP/1.0" or headers.get("connection", "").lower() == "close":
+                if (
+                    version == "HTTP/1.0"
+                    or headers.get("connection", "").lower() == "close"
+                ):
                     return
 
     def close(self) -> None:
@@ -247,16 +266,24 @@ def main() -> None:
                 "cache-control": "缓存策略（max-age 等）",
                 "age": "这份响应在中间缓存里待了多久",
             }.get(key, "")
-            print(f"      {key}: {value}" + (f"      <- {note}" if note else ""))
+            print(
+                f"      {key}: {value}" + (f"      <- {note}" if note else "")
+            )
         print(f"    body 长度: {len(parsed['body'])} 字节")
         length_header = parsed["headers"].get("content-length")
         if length_header is None:
             transfer = parsed["headers"].get("transfer-encoding", "(无)")
-            print(f"    注意: 这条响应没有 Content-Length（Transfer-Encoding: {transfer}）,")
-            print("          所以 body 的边界是靠 chunked 分块标记确定的（见下面第 2 步的手写解码）。")
+            print(
+                f"    注意: 这条响应没有 Content-Length（Transfer-Encoding: {transfer}）,"
+            )
+            print(
+                "          所以 body 的边界是靠 chunked 分块标记确定的（见下面第 2 步的手写解码）。"
+            )
         else:
-            print(f"    与 Content-Length 对比: 声明 {length_header}, 实收 {len(parsed['body'])} "
-                  f"-> 一致: {int(length_header) == len(parsed['body'])}")
+            print(
+                f"    与 Content-Length 对比: 声明 {length_header}, 实收 {len(parsed['body'])} "
+                f"-> 一致: {int(length_header) == len(parsed['body'])}"
+            )
         print("""
   到这里你已经看完了 HTTP 的全貌: 一行状态 + 若干头 + 空行 + body。
   浏览器地址栏敲回车、curl、requests 库, 底层做的都是这件事。
@@ -277,15 +304,18 @@ def main() -> None:
       其它       404
 """)
 
-
     def raw_request(payload: str | bytes) -> socket.socket:
         s = socket.create_connection((host, port), timeout=5)
-        s.sendall(payload if isinstance(payload, bytes) else payload.encode("ascii"))
+        s.sendall(
+            payload if isinstance(payload, bytes) else payload.encode("ascii")
+        )
         return s
 
     # (a) Content-Length
     print("  (a) GET /fixed —— 用 Content-Length 判断 body 结束")
-    s = raw_request(f"GET /fixed HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")
+    s = raw_request(
+        f"GET /fixed HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+    )
     data = b""
     while True:
         chunk = s.recv(4096)
@@ -296,13 +326,19 @@ def main() -> None:
     hexdump(data, limit=256)
     parsed = parse_http_response(data)
     print(f"      状态行: {parsed['status_line']}")
-    print(f"      Content-Length = {parsed['headers'].get('content-length')}, "
-          f"实际 body = {len(parsed['body'])} 字节, 内容 = {parsed['body']!r}")
-    print("      关键: 收到那么长的字节后, 后面即使还有数据也不属于这个响应 -> 可以开始下一个请求。")
+    print(
+        f"      Content-Length = {parsed['headers'].get('content-length')}, "
+        f"实际 body = {len(parsed['body'])} 字节, 内容 = {parsed['body']!r}"
+    )
+    print(
+        "      关键: 收到那么长的字节后, 后面即使还有数据也不属于这个响应 -> 可以开始下一个请求。"
+    )
 
     # (b) chunked
     print("\n  (b) GET /chunked —— Transfer-Encoding: chunked")
-    s = raw_request(f"GET /chunked HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")
+    s = raw_request(
+        f"GET /chunked HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+    )
     data = b""
     while True:
         chunk = s.recv(4096)
@@ -319,15 +355,21 @@ def main() -> None:
     rest = encoded
     while True:
         line, _, rest = rest.partition(b"\r\n")
-        size = int(line.strip() or b"0", 16)         # 块长度是十六进制!
+        size = int(line.strip() or b"0", 16)  # 块长度是十六进制!
         if size == 0:
-            print(f"        遇到 0 块 -> 传输结束（后面可能还有 trailer 头, 通常忽略）")
+            print(
+                "        遇到 0 块 -> 传输结束（后面可能还有 trailer 头, 通常忽略）"
+            )
             break
         piece, _, rest = rest.partition(b"\r\n")
         decoded += piece[:size]
-        print(f"        块大小 {size} (0x{size:x}) -> 内容 {piece[:size]!r}  <- 每块后跟 CRLF")
+        print(
+            f"        块大小 {size} (0x{size:x}) -> 内容 {piece[:size]!r}  <- 每块后跟 CRLF"
+        )
     print(f"      解码后的 body = {decoded!r}")
-    print(f"      与 Content-Length 方案的差别: 长度事先未知也能发, 适合流式生成/压缩/代理转发")
+    print(
+        "      与 Content-Length 方案的差别: 长度事先未知也能发, 适合流式生成/压缩/代理转发"
+    )
 
     # (c) close 界定
     print("\n  (c) GET /close —— 没有长度信息, 读到 EOF 为止")
@@ -336,20 +378,26 @@ def main() -> None:
     while True:
         chunk = s.recv(4096)
         if not chunk:
-            print("      recv 返回 b'' -> 连接关闭, 说明 body 结束了（HTTP/1.0 的做法）")
+            print(
+                "      recv 返回 b'' -> 连接关闭, 说明 body 结束了（HTTP/1.0 的做法）"
+            )
             break
         data += chunk
     s.close()
     parsed = parse_http_response(data)
     print(f"      body = {parsed['body']!r}")
-    print("      代价: 每条响应都要新开一条 TCP 连接, 没法复用 -> HTTP/1.1 才引入 keep-alive 和长度")
+    print(
+        "      代价: 每条响应都要新开一条 TCP 连接, 没法复用 -> HTTP/1.1 才引入 keep-alive 和长度"
+    )
 
     # (d) POST + 请求体
     print("\n  (d) POST /echo —— 请求体也要长度（客户端侧同样的问题）")
     payload = "你好，HTTP".encode("utf-8")
-    req = (f"POST /echo HTTP/1.1\r\nHost: {host}\r\n"
-           f"Content-Type: text/plain; charset=utf-8\r\n"
-           f"Content-Length: {len(payload)}\r\nConnection: close\r\n\r\n").encode("ascii") + payload
+    req = (
+        f"POST /echo HTTP/1.1\r\nHost: {host}\r\n"
+        f"Content-Type: text/plain; charset=utf-8\r\n"
+        f"Content-Length: {len(payload)}\r\nConnection: close\r\n\r\n"
+    ).encode("ascii") + payload
     s = raw_request(req)
     data = b""
     while True:
@@ -359,7 +407,9 @@ def main() -> None:
         data += chunk
     s.close()
     parsed = parse_http_response(data)
-    print(f"      发送: Content-Length: {len(payload)}（按字节数, 不是字符数！）")
+    print(
+        f"      发送: Content-Length: {len(payload)}（按字节数, 不是字符数！）"
+    )
     print(f"      响应 body: {parsed['body']!r}")
     print("""      注意: 中文一个字符占 3 个 UTF-8 字节, 用 len(str) 算 Content-Length 是经典 bug,
       必须用 len(s.encode('utf-8'))。
@@ -372,15 +422,19 @@ def main() -> None:
     s.sendall(f"GET /fixed HTTP/1.1\r\nHost: {host}\r\n\r\n".encode())
     second = s.recv(4096)
     s.close()
-    print(f"      第一次响应 {len(first)} 字节, 第二次响应 {len(second)} 字节, "
-          f"服务端看到的请求序列: {server.requests_seen[-2:]}")
+    print(
+        f"      第一次响应 {len(first)} 字节, 第二次响应 {len(second)} 字节, "
+        f"服务端看到的请求序列: {server.requests_seen[-2:]}"
+    )
     print("""      同一连接上复用了两次请求（HTTP/1.1 默认 keep-alive）。
       好处: 省掉三次握手和慢启动, 延迟大幅下降。
       代价: 服务端要为每条空闲连接保留资源 -> 需要超时回收（"idle timeout"）。
 
   (f) 302 重定向 —— 客户端要自己跟着跳（curl -L / requests 默认跟随）
 """)
-    s = raw_request(f"GET /redirect HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")
+    s = raw_request(
+        f"GET /redirect HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+    )
     data = b""
     while True:
         chunk = s.recv(4096)
@@ -389,7 +443,9 @@ def main() -> None:
         data += chunk
     s.close()
     parsed = parse_http_response(data)
-    print(f"      {parsed['status_line']}   Location: {parsed['headers'].get('location')}")
+    print(
+        f"      {parsed['status_line']}   Location: {parsed['headers'].get('location')}"
+    )
 
     # ---------------------------------------------------------------- 第 3 步
     title("第 3 步：速查表")

@@ -58,8 +58,13 @@ def title(text: str) -> None:
 def states_of_port(port: int) -> dict[str, int]:
     """统计某端口在各状态下的条数。"""
     try:
-        out = subprocess.run(["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
-                             capture_output=True, text=True, errors="replace", timeout=10).stdout
+        out = subprocess.run(
+            ["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=10,
+        ).stdout
     except (OSError, subprocess.SubprocessError):
         return {}
     counter: dict[str, int] = {}
@@ -74,8 +79,13 @@ def states_of_port(port: int) -> dict[str, int]:
 
 def sysctl(name: str) -> str:
     try:
-        return subprocess.run(["sysctl", "-n", name], capture_output=True, text=True,
-                              errors="replace", timeout=5).stdout.strip()
+        return subprocess.run(
+            ["sysctl", "-n", name],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=5,
+        ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -86,7 +96,9 @@ def msl_millis() -> int:
     try:
         return int(raw)
     except (TypeError, ValueError):
-        print(f"  （读不到 net.inet.tcp.msl, 按默认 15000ms 计算。原始值: {raw!r}）")
+        print(
+            f"  （读不到 net.inet.tcp.msl, 按默认 15000ms 计算。原始值: {raw!r}）"
+        )
         return 15000
 
 
@@ -97,7 +109,9 @@ def main() -> None:
     title("第 1 步：谁关谁负责 —— 观察 TIME_WAIT 的产生")
 
     msl_ms = msl_millis()
-    print(f"  本机 net.inet.tcp.msl = {msl_ms} ms, 所以 TIME_WAIT 会持续 2*MSL = {msl_ms * 2 / 1000:.0f} 秒")
+    print(
+        f"  本机 net.inet.tcp.msl = {msl_ms} ms, 所以 TIME_WAIT 会持续 2*MSL = {msl_ms * 2 / 1000:.0f} 秒"
+    )
 
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -113,10 +127,10 @@ def main() -> None:
     for i in range(8):
         c = socket.create_connection(("127.0.0.1", port))
         conn, _ = srv.accept()
-        conn.sendall(b"bye")            # 服务端先说话
-        conn.close()                    # 服务端主动关闭 -> 它要背 TIME_WAIT
+        conn.sendall(b"bye")  # 服务端先说话
+        conn.close()  # 服务端主动关闭 -> 它要背 TIME_WAIT
         c.recv(16)
-        clients.append(c)               # 客户端故意不关, 让 TIME_WAIT 停住
+        clients.append(c)  # 客户端故意不关, 让 TIME_WAIT 停住
         time.sleep(0.05)
 
     time.sleep(0.3)
@@ -151,7 +165,7 @@ def main() -> None:
     c2.close()
     time.sleep(0.3)
     print(f"    此时服务端端口状态: {states_of_port(port)}")
-    print(f"""    服务端那个 conn 现在处于 CLOSE_WAIT: 它已经收到对方的 FIN 并回了 ACK,
+    print("""    服务端那个 conn 现在处于 CLOSE_WAIT: 它已经收到对方的 FIN 并回了 ACK,
     但**我们的代码还没调用 conn2.close()**, 所以 FIN 一直没发出去。
     这条连接会一直占着内核资源, 直到进程退出。
 
@@ -164,7 +178,9 @@ def main() -> None:
 """)
     conn2.close()
     time.sleep(0.2)
-    print(f"  调用 conn2.close() 之后: {states_of_port(port)}   <- CLOSE_WAIT 立刻消失")
+    print(
+        f"  调用 conn2.close() 之后: {states_of_port(port)}   <- CLOSE_WAIT 立刻消失"
+    )
 
     # ---------------------------------------------------------------- 第 3 步
     title("第 3 步：SO_REUSEADDR，重启服务器时的救命选项")
@@ -179,17 +195,23 @@ def main() -> None:
         conn, _ = srv.accept()
         conn.close()
         c.close()
-    srv.close()                       # <= 模拟「服务端进程退出」, 监听 socket 释放
+    srv.close()  # <= 模拟「服务端进程退出」, 监听 socket 释放
     time.sleep(0.3)
     print(f"  旧服务端已关闭, 现在端口 {port} 的状态: {states_of_port(port)}")
 
     naive = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         naive.bind(("127.0.0.1", port))
-        print("  不加 SO_REUSEADDR 直接 bind: 成功了（本平台可能允许, 或 TIME_WAIT 已清空）")
+        print(
+            "  不加 SO_REUSEADDR 直接 bind: 成功了（本平台可能允许, 或 TIME_WAIT 已清空）"
+        )
     except OSError as exc:
-        print(f"  不加 SO_REUSEADDR 直接 bind: 失败 -> {type(exc).__name__}: {exc}")
-        print("      <- 明明没有进程在监听了, 却还是 Address already in use, 就是 TIME_WAIT 在占位。")
+        print(
+            f"  不加 SO_REUSEADDR 直接 bind: 失败 -> {type(exc).__name__}: {exc}"
+        )
+        print(
+            "      <- 明明没有进程在监听了, 却还是 Address already in use, 就是 TIME_WAIT 在占位。"
+        )
     finally:
         naive.close()
 
@@ -198,8 +220,10 @@ def main() -> None:
     try:
         friendly.bind(("127.0.0.1", port))
         friendly.listen(32)
-        print("  加上 SO_REUSEADDR 后 bind 同一个端口: 成功  <- 这就是每个服务端都该有的那一行")
-        srv = friendly                # 用这个「重启后」的服务端继续后面的实验
+        print(
+            "  加上 SO_REUSEADDR 后 bind 同一个端口: 成功  <- 这就是每个服务端都该有的那一行"
+        )
+        srv = friendly  # 用这个「重启后」的服务端继续后面的实验
         print("""
   SO_REUSEADDR 到底允许多做什么（容易误解, 说清楚）:
     * 允许 bind 一个「有 TIME_WAIT 连接的地址」-> 重启服务器不再报错（主要用途）
@@ -226,8 +250,12 @@ def main() -> None:
 """)
     linger_client = socket.create_connection(("127.0.0.1", port))
     linger_server_conn, _ = srv.accept()
-    linger_client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
-    print(f"  客户端设置 SO_LINGER={struct.unpack('ii', linger_client.getsockopt(socket.SOL_SOCKET, socket.SO_LINGER, 8))} 然后 close()")
+    linger_client.setsockopt(
+        socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+    )
+    print(
+        f"  客户端设置 SO_LINGER={struct.unpack('ii', linger_client.getsockopt(socket.SOL_SOCKET, socket.SO_LINGER, 8))} 然后 close()"
+    )
     linger_client.close()
     time.sleep(0.2)
 
@@ -240,7 +268,9 @@ def main() -> None:
             print(f"  服务端收到数据: {data!r}")
     except ConnectionResetError as exc:
         print(f"  服务端 recv -> ConnectionResetError: {exc}")
-        print("      <- 这就是 RST 的效果: 服务端立刻知道「对方强制断开了」, 不需要等超时。")
+        print(
+            "      <- 这就是 RST 的效果: 服务端立刻知道「对方强制断开了」, 不需要等超时。"
+        )
     except socket.timeout:
         print("  服务端 recv 超时")
     finally:
@@ -251,16 +281,20 @@ def main() -> None:
 
     dead_client = socket.create_connection(("127.0.0.1", port))
     dead_conn, _ = srv.accept()
-    dead_conn.close()                      # 服务端立刻关闭（发 FIN）
+    dead_conn.close()  # 服务端立刻关闭（发 FIN）
     time.sleep(0.3)
-    print(f"  服务端已 close, 客户端却还想发数据:")
+    print("  服务端已 close, 客户端却还想发数据:")
     for attempt in range(1, 5):
         try:
             sent = dead_client.send("还有人在吗?".encode("utf-8"))
-            print(f"    第 {attempt} 次 send 返回 {sent} 字节（看起来成功, 其实只是写进了内核缓冲）")
+            print(
+                f"    第 {attempt} 次 send 返回 {sent} 字节（看起来成功, 其实只是写进了内核缓冲）"
+            )
         except BrokenPipeError as exc:
             print(f"    第 {attempt} 次 send -> BrokenPipeError: {exc}")
-            print("        <- 内核已经收到 RST, 再写就直接报错。管道概念上的「对端没了」。")
+            print(
+                "        <- 内核已经收到 RST, 再写就直接报错。管道概念上的「对端没了」。"
+            )
             break
         except ConnectionResetError as exc:
             print(f"    第 {attempt} 次 send -> ConnectionResetError: {exc}")

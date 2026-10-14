@@ -64,8 +64,13 @@ def sysctl_value(name: str) -> str:
     if not shutil.which("sysctl"):
         return ""
     try:
-        return subprocess.run(["sysctl", "-n", name], capture_output=True, text=True,
-                              errors="replace", timeout=5).stdout.strip()
+        return subprocess.run(
+            ["sysctl", "-n", name],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=5,
+        ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -91,14 +96,16 @@ def main() -> None:
 
     print("  用 struct 打包成 2 字节看看:")
     for port in [0, 80, 443, 8080, 65535]:
-        packed = struct.pack("!H", port)          # !H = 大端 16 位无符号
+        packed = struct.pack("!H", port)  # !H = 大端 16 位无符号
         print(f"    端口 {port:<6} -> 字节 {list(packed)}  = 0x{port:04X}")
     print()
     try:
-        struct.pack("!H", 65536)                  # 故意越界
+        struct.pack("!H", 65536)  # 故意越界
     except struct.error as exc:
         print(f"    端口 65536 -> 打包失败: {exc}")
-        print("    这就证明了端口只有 16 位: 最大 65535。端口号是「稀缺资源」的根源。")
+        print(
+            "    这就证明了端口只有 16 位: 最大 65535。端口号是「稀缺资源」的根源。"
+        )
 
     print("""
   为什么端口要在发送时转成网络字节序? 因为端口是 16 位整数, 必须大端。
@@ -111,7 +118,14 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 2 步
     title("第 2 步：常见服务端口 & /etc/services")
 
-    services = [("http", "tcp"), ("https", "tcp"), ("ssh", "tcp"), ("domain", "udp"), ("smtp", "tcp"), ("imaps", "tcp")]
+    services = [
+        ("http", "tcp"),
+        ("https", "tcp"),
+        ("ssh", "tcp"),
+        ("domain", "udp"),
+        ("smtp", "tcp"),
+        ("imaps", "tcp"),
+    ]
     for name, proto in services:
         try:
             port = socket.getservbyname(name, proto)
@@ -139,17 +153,19 @@ def main() -> None:
 
   ("0.0.0.0", 8080)    本机所有网卡的所有 IP 都接受连接（对外服务）
   ("127.0.0.1", 8080)  只有本机回环能连, 外部完全看不到（本地开发最安全）
-  ("{LOCAL_LAN_IP or '192.168.x.x'}", 8080) 只在这张网卡的地址上接受连接
+  ("{LOCAL_LAN_IP or "192.168.x.x"}", 8080) 只在这张网卡的地址上接受连接
 
   0.0.0.0 不是「一个地址」, 而是「通配/所有」的意思。
 """)
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(("127.0.0.1", 0))      # 端口 0 = 请内核随便给一个空闲端口
+    server.bind(("127.0.0.1", 0))  # 端口 0 = 请内核随便给一个空闲端口
     server.listen(8)
     bound_ip, bound_port = server.getsockname()
-    print(f"  实测: bind(('127.0.0.1', 0)) 之后 getsockname() = {server.getsockname()}")
+    print(
+        f"  实测: bind(('127.0.0.1', 0)) 之后 getsockname() = {server.getsockname()}"
+    )
     print(f"        -> 内核分配的端口是 {bound_port}，监听地址是 {bound_ip}")
 
     # 从回环连 => 成功
@@ -157,7 +173,9 @@ def main() -> None:
     client.settimeout(2)
     try:
         client.connect(("127.0.0.1", bound_port))
-        print(f"  从 127.0.0.1 连 {bound_port}: 连接成功 -> {client.getsockname()}")
+        print(
+            f"  从 127.0.0.1 连 {bound_port}: 连接成功 -> {client.getsockname()}"
+        )
     except OSError as exc:
         print(f"  从 127.0.0.1 连 {bound_port}: 失败 {exc}")
     finally:
@@ -169,10 +187,16 @@ def main() -> None:
         probe.settimeout(2)
         try:
             probe.connect((LOCAL_LAN_IP, bound_port))
-            print(f"  从 {LOCAL_LAN_IP} 连 {bound_port}: 居然成功（说明监听范围更宽）")
+            print(
+                f"  从 {LOCAL_LAN_IP} 连 {bound_port}: 居然成功（说明监听范围更宽）"
+            )
         except OSError as exc:
-            print(f"  从 {LOCAL_LAN_IP} 连 {bound_port}: 被拒绝({type(exc).__name__}: {exc})")
-            print("        <- 同一个端口, 只因为目标 IP 不在监听范围内, 连不上。")
+            print(
+                f"  从 {LOCAL_LAN_IP} 连 {bound_port}: 被拒绝({type(exc).__name__}: {exc})"
+            )
+            print(
+                "        <- 同一个端口, 只因为目标 IP 不在监听范围内, 连不上。"
+            )
         finally:
             probe.close()
     server.close()
@@ -184,8 +208,12 @@ def main() -> None:
     first.bind(("127.0.0.1", 0))
     second.bind(("127.0.0.1", 0))
     p1, p2 = first.getsockname()[1], second.getsockname()[1]
-    print(f"  连续两次 bind 端口 0 -> 内核给了 {p1} 和 {p2}（一般都在临时端口区间）")
-    print("  临时端口范围（macOS: sysctl net.inet.ip.portrange.*；Linux: /proc/sys/net/ipv4/ip_local_port_range）:")
+    print(
+        f"  连续两次 bind 端口 0 -> 内核给了 {p1} 和 {p2}（一般都在临时端口区间）"
+    )
+    print(
+        "  临时端口范围（macOS: sysctl net.inet.ip.portrange.*；Linux: /proc/sys/net/ipv4/ip_local_port_range）:"
+    )
     range_first = sysctl_value("net.inet.ip.portrange.first")
     range_last = sysctl_value("net.inet.ip.portrange.last")
     if range_first and range_last:
@@ -193,10 +221,14 @@ def main() -> None:
         print(f"    net.inet.ip.portrange.last  = {range_last}")
     else:
         try:
-            with open("/proc/sys/net/ipv4/ip_local_port_range", encoding="utf-8") as fh:
+            with open(
+                "/proc/sys/net/ipv4/ip_local_port_range", encoding="utf-8"
+            ) as fh:
                 print(f"    ip_local_port_range = {fh.read().strip()}")
         except OSError:
-            print("    （本环境读不到临时端口范围, 跳过；macOS 默认是 49152-65535）")
+            print(
+                "    （本环境读不到临时端口范围, 跳过；macOS 默认是 49152-65535）"
+            )
     print("""
   这就是客户端 connect() 时源端口的来源。内核从这段范围里挑一个「当前没被占用」的,
   用完（连接彻底关闭后）还要等 TIME_WAIT 结束才能复用 -> 第 4 章会看到。
@@ -218,10 +250,16 @@ def main() -> None:
     clash.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         clash.bind(("127.0.0.1", port))
-        print(f"  第二次 bind 同一个端口 {port}: 成功了（本平台不允许? 看看下面）")
+        print(
+            f"  第二次 bind 同一个端口 {port}: 成功了（本平台不允许? 看看下面）"
+        )
     except OSError as exc:
-        print(f"  第二次 bind 同一个端口 {port}: 失败 -> {type(exc).__name__}: {exc}")
-        print("        errno.EADDRINUSE: 端口已被占用。这就是「端口冲突」的真面目。")
+        print(
+            f"  第二次 bind 同一个端口 {port}: 失败 -> {type(exc).__name__}: {exc}"
+        )
+        print(
+            "        errno.EADDRINUSE: 端口已被占用。这就是「端口冲突」的真面目。"
+        )
     finally:
         clash.close()
 
@@ -262,7 +300,9 @@ def main() -> None:
         for _ in range(2):
             conn, peer = srv.accept()
             accepted.append((conn, peer))
-            print(f"  [服务端 accept] 新连接来自 {peer}，服务端本地端 {conn.getsockname()}")
+            print(
+                f"  [服务端 accept] 新连接来自 {peer}，服务端本地端 {conn.getsockname()}"
+            )
         holder["conns"] = accepted
         # 保持连接打开, 让主线程去 netstat 里查
         holder["event"] = threading.Event()
@@ -283,7 +323,9 @@ def main() -> None:
         c.connect(("127.0.0.1", port))
         clients.append(c)
         time.sleep(0.1)
-        print(f"  [客户端 {i + 1}] 本地端 {c.getsockname()} -> 对端 {c.getpeername()}")
+        print(
+            f"  [客户端 {i + 1}] 本地端 {c.getsockname()} -> 对端 {c.getpeername()}"
+        )
 
     print(f"""
   观察到的关键点:
@@ -300,8 +342,13 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 7 步
     title("第 7 步：用 netstat 验证（系统视角的五元组）")
 
-    out = subprocess.run(["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
-                         capture_output=True, text=True, errors="replace", timeout=10).stdout
+    out = subprocess.run(
+        ["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=10,
+    ).stdout
     hits = [ln for ln in out.splitlines() if f".{port}" in ln]
     print(f"  在 `netstat -an -f inet -p tcp` 里搜端口 {port} 得到的行:")
     for ln in hits[:8]:

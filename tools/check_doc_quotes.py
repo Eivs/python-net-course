@@ -49,7 +49,9 @@ def main() -> int:
     if not log_paths:
         print("找不到 .logs/*.log，先运行：bash run_all.sh")
         return 1
-    blob = "\n".join(open(p, encoding="utf-8", errors="replace").read() for p in log_paths)
+    blob = "\n".join(
+        open(p, encoding="utf-8", errors="replace").read() for p in log_paths
+    )
     masked_blob = mask(blob)
 
     checked = 0
@@ -57,12 +59,20 @@ def main() -> int:
     missing: list[tuple[str, str]] = []
     # 如果某个代码块后面紧跟的说明里写了「每次运行都不同 / 随机生成」，
     # 说明作者已经声明了这段输出会被重新生成的日志改变，跳过检查（但要求写清楚）。
-    VOLATILE_MARKERS = ("每次运行都不同", "随机生成", "值会随运行变化", "随运行波动")
+    VOLATILE_MARKERS = (
+        "每次运行都不同",
+        "随机生成",
+        "值会随运行变化",
+        "随运行波动",
+    )
 
     for doc in sorted(glob.glob(os.path.join(ROOT, "doc", "*.md"))):
         text = open(doc, encoding="utf-8").read()
         for block in re.finditer(r"```text\n(.*?)```", text, re.S):
-            if any(marker in text[block.end():block.end() + 300] for marker in VOLATILE_MARKERS):
+            if any(
+                marker in text[block.end() : block.end() + 300]
+                for marker in VOLATILE_MARKERS
+            ):
                 skipped_blocks += 1
                 continue
             for raw_line in block.group(1).splitlines():
@@ -77,10 +87,14 @@ def main() -> int:
                 if mask(core) not in masked_blob:
                     missing.append((os.path.relpath(doc, ROOT), line))
 
-    print(f"检查了 {checked} 行文档引用（来自 {len(log_paths)} 个日志文件）"
-          f"，另有 {skipped_blocks} 个代码块因已声明「值会变」而跳过")
+    print(
+        f"检查了 {checked} 行文档引用（来自 {len(log_paths)} 个日志文件）"
+        f"，另有 {skipped_blocks} 个代码块因已声明「值会变」而跳过"
+    )
     if missing:
-        print(f"\n以下 {len(missing)} 行在日志里找不到对应内容，请人工确认是否写错或编造：")
+        print(
+            f"\n以下 {len(missing)} 行在日志里找不到对应内容，请人工确认是否写错或编造："
+        )
         for doc, line in missing:
             print(f"  {doc}: {line[:110]}")
         return 1

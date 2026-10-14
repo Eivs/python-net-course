@@ -131,7 +131,9 @@ def main() -> None:
     title("第 4 步：本地 hosts 文件优先于 DNS")
 
     hosts_path = "/etc/hosts"
-    max_hosts_lines = 10  # 只展示前 10 条: 本机 hosts 可能有几百条, 全打出来会盖住重点
+    max_hosts_lines = (
+        10  # 只展示前 10 条: 本机 hosts 可能有几百条, 全打出来会盖住重点
+    )
     print(f"{hosts_path} 内容里非注释的部分（解析顺序: hosts 文件 -> DNS）:")
     try:
         with open(hosts_path, "r", encoding="utf-8", errors="replace") as fh:

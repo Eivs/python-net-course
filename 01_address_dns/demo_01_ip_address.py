@@ -53,7 +53,9 @@ def main() -> None:
     octets = [int(part) for part in text.split(".")]
     as_int = 0
     for value in octets:
-        as_int = (as_int << 8) | value          # <<8 等于「左移一个字节」，再或上新的低 8 位
+        as_int = (
+            as_int << 8
+        ) | value  # <<8 等于「左移一个字节」，再或上新的低 8 位
 
     print(f"点分十进制        : {text}")
     print(f"四段（十进制）    : {octets}")
@@ -67,7 +69,9 @@ def main() -> None:
     from_struct = struct.unpack("!I", packed)[0]
 
     print()
-    print(f"socket.inet_aton({text!r}) = {packed!r}  即每个字节: {list(packed)}")
+    print(
+        f"socket.inet_aton({text!r}) = {packed!r}  即每个字节: {list(packed)}"
+    )
     print(f"struct.unpack('!I', ...)   = {from_struct}")
     print(f"ipaddress 模块             = {int(ipaddress.ip_address(text))}")
     assert from_struct == as_int == int(ipaddress.ip_address(text))
@@ -75,7 +79,9 @@ def main() -> None:
 
     # 反过来：整数 -> 字符串
     print()
-    print(f"整数 {as_int} 还原成字符串: {socket.inet_ntoa(struct.pack('!I', as_int))}")
+    print(
+        f"整数 {as_int} 还原成字符串: {socket.inet_ntoa(struct.pack('!I', as_int))}"
+    )
 
     # ---------------------------------------------------------------- 第 2 步
     title("第 2 步：网络字节序（大端）")
@@ -89,10 +95,16 @@ Python 里两种常见写法:
   struct.pack("!I", n)   # ! = big-endian, I = unsigned int(4字节)
   struct.pack(">I", n)   # > 也是 big-endian
 """)
-    print(f"192.168.1.10 的记忆: struct.pack('!I') = {list(struct.pack('!I', int(ipaddress.ip_address('192.168.1.10'))))}")
-    print(f"                     struct.pack('<I') = {list(struct.pack('<I', int(ipaddress.ip_address('192.168.1.10'))))}  <- 小端，字节顺序反了")
+    print(
+        f"192.168.1.10 的记忆: struct.pack('!I') = {list(struct.pack('!I', int(ipaddress.ip_address('192.168.1.10'))))}"
+    )
+    print(
+        f"                     struct.pack('<I') = {list(struct.pack('<I', int(ipaddress.ip_address('192.168.1.10'))))}  <- 小端，字节顺序反了"
+    )
     # htons/htonl 是最常用的字节序转换函数：host to network short/long
-    print(f"socket.htons(0x1234) = 0x{socket.htons(0x1234):04X}   (把 16 位整数转成网络序, 端口号会用到)")
+    print(
+        f"socket.htons(0x1234) = 0x{socket.htons(0x1234):04X}   (把 16 位整数转成网络序, 端口号会用到)"
+    )
 
     # ---------------------------------------------------------------- 第 3 步
     title("第 3 步：掩码，一个 IP 里藏着「网络号 + 主机号」")
@@ -103,13 +115,21 @@ Python 里两种常见写法:
     net = ipaddress.ip_network("192.168.1.10/23", strict=False)
 
     print(f"网段表示法        : {net}")
-    print(f"网络地址          : {net.network_address}   (主机位全 0, 代表整个网段)")
+    print(
+        f"网络地址          : {net.network_address}   (主机位全 0, 代表整个网段)"
+    )
     print(f"子网掩码          : {net.netmask}  = 0x{int(net.netmask):08X}")
     print(f"反掩码 wildcard   : {net.hostmask}")
-    print(f"广播地址          : {net.broadcast_address}   (主机位全 1, 发给网段内所有机器)")
-    print(f"地址总数          : {net.num_addresses}   可用主机数: {net.num_addresses - 2}")
+    print(
+        f"广播地址          : {net.broadcast_address}   (主机位全 1, 发给网段内所有机器)"
+    )
+    print(
+        f"地址总数          : {net.num_addresses}   可用主机数: {net.num_addresses - 2}"
+    )
     print(f"前 3 个可用主机   : {[str(h) for h in list(net.hosts())[:3]]}")
-    print(f"前缀长度          : /{net.prefixlen}  -> 前 {net.prefixlen} 位是网络号, 后 {32 - net.prefixlen} 位是主机号")
+    print(
+        f"前缀长度          : /{net.prefixlen}  -> 前 {net.prefixlen} 位是网络号, 后 {32 - net.prefixlen} 位是主机号"
+    )
 
     neighbours = [
         ("192.168.1.1", "同 /23 网段内的网关"),
@@ -131,30 +151,42 @@ Python 里两种常见写法:
     title("第 4 步：必须认识的几个特殊地址")
 
     specials = [
-        ("0.0.0.0",        "只在 bind 时有意义: 表示「监听本机所有网卡的所有 IP」"),
-        ("127.0.0.1",      "回环地址: 数据根本不经过网卡, 内核内部直接掉头"),
-        ("255.255.255.255","受限广播: 只在本地链路生效, 路由器不会转发"),
+        ("0.0.0.0", "只在 bind 时有意义: 表示「监听本机所有网卡的所有 IP」"),
+        ("127.0.0.1", "回环地址: 数据根本不经过网卡, 内核内部直接掉头"),
+        ("255.255.255.255", "受限广播: 只在本地链路生效, 路由器不会转发"),
         ("169.254.0.0/16", "链路本地/APIPA: DHCP 没拿到地址时系统自分配的"),
-        ("10.0.0.0/8",     "RFC1918 私有地址, 公网路由器不转发"),
-        ("172.16.0.0/12",  "RFC1918 私有地址"),
+        ("10.0.0.0/8", "RFC1918 私有地址, 公网路由器不转发"),
+        ("172.16.0.0/12", "RFC1918 私有地址"),
         ("192.168.0.0/16", "RFC1918 私有地址, 家里的路由器就是这个"),
-        ("100.64.0.0/10",  "运营商级 NAT (CGNAT), 也是 Tailscale 等组网默认段"),
-        ("224.0.0.0/4",    "组播: 一份数据同时发给一组订阅者"),
-        ("240.0.0.0/4",    "保留(含 255.255.255.255)"),
-        ("::1 / fe80::/10","IPv6 的回环地址 / 链路本地地址"),
+        ("100.64.0.0/10", "运营商级 NAT (CGNAT), 也是 Tailscale 等组网默认段"),
+        ("224.0.0.0/4", "组播: 一份数据同时发给一组订阅者"),
+        ("240.0.0.0/4", "保留(含 255.255.255.255)"),
+        ("::1 / fe80::/10", "IPv6 的回环地址 / 链路本地地址"),
     ]
     for addr, note in specials:
         print(f"  {addr:<18} {note}")
 
     print("\n判断一个地址属于哪一类（用 ipaddress 的属性，别自己写正则）:")
-    for addr in ["127.0.0.1", "192.168.1.1", "192.0.2.53", "8.8.8.8", "169.254.3.4", "192.168.1.10"]:
+    for addr in [
+        "127.0.0.1",
+        "192.168.1.1",
+        "192.0.2.53",
+        "8.8.8.8",
+        "169.254.3.4",
+        "192.168.1.10",
+    ]:
         ip = ipaddress.ip_address(addr)
         flags = []
-        if ip.is_loopback:   flags.append("回环")
-        if ip.is_private:    flags.append("私有")
-        if ip.is_link_local: flags.append("链路本地")
-        if ip.is_multicast:  flags.append("组播")
-        if ip.is_global:     flags.append("全球可达")
+        if ip.is_loopback:
+            flags.append("回环")
+        if ip.is_private:
+            flags.append("私有")
+        if ip.is_link_local:
+            flags.append("链路本地")
+        if ip.is_multicast:
+            flags.append("组播")
+        if ip.is_global:
+            flags.append("全球可达")
         print(f"  {addr:<18} {'/'.join(flags) or '普通'}")
 
     # ---------------------------------------------------------------- 第 5 步
@@ -170,7 +202,9 @@ Python 里两种常见写法:
             probe.connect(target)
             local_ip, local_port = probe.getsockname()
             peer = probe.getpeername()
-            print(f"  目标 {str(target):<18} -> 内核会选用的源 IP: {local_ip:<16} 源端口: {local_port}  (对端 {peer})")
+            print(
+                f"  目标 {str(target):<18} -> 内核会选用的源 IP: {local_ip:<16} 源端口: {local_port}  (对端 {peer})"
+            )
         except OSError as exc:
             print(f"  目标 {str(target):<18} -> 探测失败: {exc}")
         finally:

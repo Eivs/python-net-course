@@ -87,10 +87,17 @@ class Response:
     content_length: int | None = None
 
     REASONS = {
-        200: "OK", 201: "Created", 204: "No Content",
-        301: "Moved Permanently", 302: "Found", 304: "Not Modified",
-        400: "Bad Request", 403: "Forbidden", 404: "Not Found",
-        405: "Method Not Allowed", 413: "Payload Too Large",
+        200: "OK",
+        201: "Created",
+        204: "No Content",
+        301: "Moved Permanently",
+        302: "Found",
+        304: "Not Modified",
+        400: "Bad Request",
+        403: "Forbidden",
+        404: "Not Found",
+        405: "Method Not Allowed",
+        413: "Payload Too Large",
         500: "Internal Server Error",
     }
 
@@ -99,8 +106,14 @@ class Response:
         lines = [f"HTTP/1.1 {self.status} {reason}"]
         headers = dict(self.headers)
         headers.setdefault("Content-Type", "text/plain; charset=utf-8")
-        headers["Content-Length"] = str(self.content_length if self.content_length is not None else len(self.body))
-        headers["Date"] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
+        headers["Content-Length"] = str(
+            self.content_length
+            if self.content_length is not None
+            else len(self.body)
+        )
+        headers["Date"] = time.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime()
+        )
         headers["Connection"] = "keep-alive" if keep_alive else "close"
         for key, value in headers.items():
             lines.append(f"{key}: {value}")
@@ -109,7 +122,7 @@ class Response:
 
 
 # ================================================================ 请求解析
-MAX_HEADER_BYTES = 64 * 1024        # 防止 slowloris / 超大头攻击
+MAX_HEADER_BYTES = 64 * 1024  # 防止 slowloris / 超大头攻击
 MAX_BODY_BYTES = 8 * 1024 * 1024
 
 
@@ -130,11 +143,11 @@ def read_request(conn: socket.socket, buf: bytearray) -> Request | None:
             raise BadRequest("请求头过大")
         chunk = conn.recv(4096)
         if not chunk:
-            return None                     # 对端关闭, 没拿到完整请求
+            return None  # 对端关闭, 没拿到完整请求
         buf += chunk
 
     head, _, rest = buf.partition(b"\r\n\r\n")
-    buf[:] = rest                           # 只保留 body 及后续数据
+    buf[:] = rest  # 只保留 body 及后续数据
     try:
         text = head.decode("iso-8859-1")
     except UnicodeDecodeError as exc:
@@ -155,7 +168,9 @@ def read_request(conn: socket.socket, buf: bytearray) -> Request | None:
         key, sep, value = line.partition(":")
         if not sep:
             raise BadRequest(f"头字段缺少冒号: {line!r}")
-        headers[key.strip().lower()] = value.strip()      # 头名大小写不敏感, 统一小写
+        headers[key.strip().lower()] = (
+            value.strip()
+        )  # 头名大小写不敏感, 统一小写
 
     if version == "HTTP/1.1" and "host" not in headers:
         raise BadRequest("HTTP/1.1 请求必须带 Host 头")
@@ -175,13 +190,24 @@ def read_request(conn: socket.socket, buf: bytearray) -> Request | None:
     body = bytes(buf[:length])
     del buf[:length]
 
-    return Request(method=method, target=target, version=version, headers=headers, body=body)
+    return Request(
+        method=method,
+        target=target,
+        version=version,
+        headers=headers,
+        body=body,
+    )
 
 
 # ================================================================ 服务器
 class HttpServer:
-    def __init__(self, host: str = "127.0.0.1", port: int = 0,
-                 static_root: str | None = None, idle_timeout: float = 5.0):
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 0,
+        static_root: str | None = None,
+        idle_timeout: float = 5.0,
+    ):
         self.static_root = os.path.abspath(static_root) if static_root else None
         self.idle_timeout = idle_timeout
         self.routes: dict[tuple[str, str], callable] = {}
@@ -199,6 +225,7 @@ class HttpServer:
         def decorator(func):
             self.routes[(method.upper(), path)] = func
             return func
+
         return decorator
 
     # ------------------------------------------------------------ 生命周期
@@ -210,7 +237,9 @@ class HttpServer:
             except (socket.timeout, OSError):
                 continue
             # 每连接一个线程: 简单、正确, 但线程数一多就吃力（第 6 章对比）
-            threading.Thread(target=self._handle_connection, args=(conn, peer), daemon=True).start()
+            threading.Thread(
+                target=self._handle_connection, args=(conn, peer), daemon=True
+            ).start()
 
     def shutdown(self) -> None:
         self._stop.set()
@@ -227,30 +256,50 @@ class HttpServer:
                         request = read_request(conn, buf)
                     except BadRequest as exc:
                         self._log(peer, "?", f"400 ({exc})", 0)
-                        conn.sendall(Response(400, body=f"400 Bad Request: {exc}\n".encode())
-                                     .serialize(keep_alive=False))
+                        conn.sendall(
+                            Response(
+                                400, body=f"400 Bad Request: {exc}\n".encode()
+                            ).serialize(keep_alive=False)
+                        )
                         return
                     except socket.timeout:
-                        return                                   # 空闲超时, 回收连接
+                        return  # 空闲超时, 回收连接
                     if request is None:
-                        return                                   # 对端关闭
+                        return  # 对端关闭
 
                     started = time.perf_counter()
                     try:
                         response = self._dispatch(request)
-                    except Exception as exc:                     # 兜底: 别让异常杀死线程
-                        response = Response(500, body=f"500 Internal Server Error: {exc}\n".encode())
-                    payload = response.serialize(keep_alive=request.wants_keep_alive())
+                    except Exception as exc:  # 兜底: 别让异常杀死线程
+                        response = Response(
+                            500,
+                            body=f"500 Internal Server Error: {exc}\n".encode(),
+                        )
+                    payload = response.serialize(
+                        keep_alive=request.wants_keep_alive()
+                    )
                     conn.sendall(payload)
-                    self._log(peer, f"{request.method} {request.path}",
-                              f"{response.status}", len(payload), time.perf_counter() - started)
+                    self._log(
+                        peer,
+                        f"{request.method} {request.path}",
+                        f"{response.status}",
+                        len(payload),
+                        time.perf_counter() - started,
+                    )
 
                     if not request.wants_keep_alive():
                         return
             except (ConnectionResetError, BrokenPipeError):
-                return                                           # 客户端跑了, 正常现象
+                return  # 客户端跑了, 正常现象
 
-    def _log(self, peer: tuple, request_line: str, status: str, size: int, elapsed: float = 0.0) -> None:
+    def _log(
+        self,
+        peer: tuple,
+        request_line: str,
+        status: str,
+        size: int,
+        elapsed: float = 0.0,
+    ) -> None:
         line = f"{peer[0]}:{peer[1]} {request_line} -> {status} {size}B {elapsed * 1000:.1f}ms"
         self.log_lines.append(line)
         print(f"    [access] {line}")
@@ -264,8 +313,11 @@ class HttpServer:
         # 同一个路径存在但方法不对 -> 405（顺便告知允许哪些方法）
         allowed = sorted(m for (m, p) in self.routes if p == request.path)
         if allowed:
-            return Response(405, headers={"Allow": ", ".join(allowed)},
-                            body=f"405 Method Not Allowed, allowed: {', '.join(allowed)}\n".encode())
+            return Response(
+                405,
+                headers={"Allow": ", ".join(allowed)},
+                body=f"405 Method Not Allowed, allowed: {', '.join(allowed)}\n".encode(),
+            )
 
         if request.method in ("GET", "HEAD"):
             return self._serve_static(request)
@@ -281,29 +333,44 @@ class HttpServer:
         # 这样才能挡住 ../../etc/passwd 这类路径穿越（最常见的一类漏洞）
         relative = request.path.lstrip("/") or "index.html"
         target = os.path.realpath(os.path.join(self.static_root, relative))
-        if not target.startswith(self.static_root + os.sep) and target != self.static_root:
+        if (
+            not target.startswith(self.static_root + os.sep)
+            and target != self.static_root
+        ):
             return Response(403, body=b"403 Forbidden\n")
 
         if os.path.isdir(target):
             if not request.path.endswith("/"):
-                return Response(301, headers={"Location": request.path + "/"}, body=b"")
+                return Response(
+                    301, headers={"Location": request.path + "/"}, body=b""
+                )
             target = os.path.join(target, "index.html")
 
         if not os.path.isfile(target):
-            return Response(404, body=f"404 Not Found: {request.path}\n".encode())
+            return Response(
+                404, body=f"404 Not Found: {request.path}\n".encode()
+            )
 
         with open(target, "rb") as fh:
             body = fh.read()
-        content_type = mimetypes.guess_type(target)[0] or "application/octet-stream"
+        content_type = (
+            mimetypes.guess_type(target)[0] or "application/octet-stream"
+        )
         if content_type.startswith("text/"):
             content_type += "; charset=utf-8"
-        headers = {"Content-Type": content_type,
-                   "Last-Modified": time.strftime("%a, %d %b %Y %H:%M:%S GMT",
-                                                  time.gmtime(os.path.getmtime(target)))}
+        headers = {
+            "Content-Type": content_type,
+            "Last-Modified": time.strftime(
+                "%a, %d %b %Y %H:%M:%S GMT",
+                time.gmtime(os.path.getmtime(target)),
+            ),
+        }
         if request.method == "HEAD":
             # HEAD 不返回 body, 但 Content-Length 要和 GET 一致（RFC 要求）,
             # 否则客户端无法用它来判断资源大小或做缓存校验。
-            return Response(200, headers=headers, body=b"", content_length=len(body))
+            return Response(
+                200, headers=headers, body=b"", content_length=len(body)
+            )
         return Response(200, headers=headers, body=body)
 
 
@@ -322,8 +389,11 @@ def self_test(server: HttpServer, static_root: str) -> bool:
     # 1) urllib 简单 GET
     with urllib.request.urlopen(f"http://{host}:{port}/hello") as resp:
         body = resp.read()
-        ok &= expect("GET /hello -> 200 且 body 正确", resp.status == 200 and b"hello" in body,
-                     f"status={resp.status} body={body!r}")
+        ok &= expect(
+            "GET /hello -> 200 且 body 正确",
+            resp.status == 200 and b"hello" in body,
+            f"status={resp.status} body={body!r}",
+        )
 
     # 2) 404
     try:
@@ -334,20 +404,31 @@ def self_test(server: HttpServer, static_root: str) -> bool:
 
     # 3) 405（用 POST 打一个只允许 GET 的路径）
     try:
-        req = urllib.request.Request(f"http://{host}:{port}/hello", data=b"x", method="POST")
+        req = urllib.request.Request(
+            f"http://{host}:{port}/hello", data=b"x", method="POST"
+        )
         urllib.request.urlopen(req)
         ok &= expect("POST /hello -> 405", False)
     except urllib.error.HTTPError as exc:
-        ok &= expect("POST /hello -> 405（附带 Allow 头）",
-                     exc.code == 405 and "GET" in (exc.headers.get("Allow") or ""),
-                     f"status={exc.code} Allow={exc.headers.get('Allow')}")
+        ok &= expect(
+            "POST /hello -> 405（附带 Allow 头）",
+            exc.code == 405 and "GET" in (exc.headers.get("Allow") or ""),
+            f"status={exc.code} Allow={exc.headers.get('Allow')}",
+        )
 
     # 4) POST 回显（请求体读取是否正确）
-    req = urllib.request.Request(f"http://{host}:{port}/echo", data="中文payload".encode("utf-8"), method="POST")
+    req = urllib.request.Request(
+        f"http://{host}:{port}/echo",
+        data="中文payload".encode("utf-8"),
+        method="POST",
+    )
     with urllib.request.urlopen(req) as resp:
         body = resp.read()
-        ok &= expect("POST /echo 回显 body（含 UTF-8 中文）",
-                     b"\xe4\xb8\xad\xe6\x96\x87" in body, f"body={body!r}")
+        ok &= expect(
+            "POST /echo 回显 body（含 UTF-8 中文）",
+            b"\xe4\xb8\xad\xe6\x96\x87" in body,
+            f"body={body!r}",
+        )
 
     # 5) keep-alive: 同一个连接发两个请求（http.client 直接暴露连接对象）
     client = http.client.HTTPConnection(host, port, timeout=5)
@@ -360,9 +441,11 @@ def self_test(server: HttpServer, static_root: str) -> bool:
         r2 = client.getresponse()
         body2 = r2.read()
         same_connection = client.sock is sock_before
-        ok &= expect("keep-alive: 两条请求复用同一条 TCP 连接",
-                     same_connection and r1.status == 200 and r2.status == 200,
-                     f"same_socket={same_connection}")
+        ok &= expect(
+            "keep-alive: 两条请求复用同一条 TCP 连接",
+            same_connection and r1.status == 200 and r2.status == 200,
+            f"same_socket={same_connection}",
+        )
     finally:
         client.close()
 
@@ -372,24 +455,35 @@ def self_test(server: HttpServer, static_root: str) -> bool:
         client.request("HEAD", "/sample.txt")
         resp = client.getresponse()
         body = resp.read()
-        ok &= expect("HEAD 有 Content-Length 但没有 body",
-                     body == b"" and int(resp.getheader("Content-Length") or 0) > 0,
-                     f"len={resp.getheader('Content-Length')} body={body!r}")
+        ok &= expect(
+            "HEAD 有 Content-Length 但没有 body",
+            body == b"" and int(resp.getheader("Content-Length") or 0) > 0,
+            f"len={resp.getheader('Content-Length')} body={body!r}",
+        )
     finally:
         client.close()
 
     # 7) 静态文件 + Content-Type
     with urllib.request.urlopen(f"http://{host}:{port}/sample.txt") as resp:
-        ok &= expect("静态文件 GET 正常且 Content-Type 正确",
-                     resp.status == 200 and "text/plain" in (resp.headers.get("Content-Type") or ""),
-                     f"ctype={resp.headers.get('Content-Type')}")
+        ok &= expect(
+            "静态文件 GET 正常且 Content-Type 正确",
+            resp.status == 200
+            and "text/plain" in (resp.headers.get("Content-Type") or ""),
+            f"ctype={resp.headers.get('Content-Type')}",
+        )
 
     # 8) 路径穿越防护
     try:
-        urllib.request.urlopen(f"http://{host}:{port}/../demo_16_mini_http_server.py")
+        urllib.request.urlopen(
+            f"http://{host}:{port}/../demo_16_mini_http_server.py"
+        )
         ok &= expect("路径穿越被挡住", False, "居然读到了目录外的文件!")
     except urllib.error.HTTPError as exc:
-        ok &= expect("路径穿越被挡住（403/404）", exc.code in (403, 404), f"status={exc.code}")
+        ok &= expect(
+            "路径穿越被挡住（403/404）",
+            exc.code in (403, 404),
+            f"status={exc.code}",
+        )
 
     # 9) 手工裸 socket 发一个残缺请求 -> 400
     raw = socket.create_connection((host, port), timeout=5)
@@ -399,7 +493,11 @@ def self_test(server: HttpServer, static_root: str) -> bool:
     ok &= expect("非法请求行 -> 400", b"400" in data, f"resp={data[:40]!r}")
 
     # 10) 验证 keep-alive 的空闲超时回收（等一小会儿再关）
-    ok &= expect("访问日志有记录", len(server.log_lines) >= 8, f"共 {len(server.log_lines)} 行")
+    ok &= expect(
+        "访问日志有记录",
+        len(server.log_lines) >= 8,
+        f"共 {len(server.log_lines)} 行",
+    )
 
     return bool(ok)
 
@@ -423,11 +521,19 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 2 步
     title("第 2 步：准备静态目录并启动服务器")
 
-    static_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_demo_static")
+    static_root = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "_demo_static"
+    )
     os.makedirs(static_root, exist_ok=True)
-    with open(os.path.join(static_root, "index.html"), "w", encoding="utf-8") as fh:
-        fh.write("<!doctype html><meta charset=utf-8><h1>来自 mini HTTP server</h1>\n")
-    with open(os.path.join(static_root, "sample.txt"), "w", encoding="utf-8") as fh:
+    with open(
+        os.path.join(static_root, "index.html"), "w", encoding="utf-8"
+    ) as fh:
+        fh.write(
+            "<!doctype html><meta charset=utf-8><h1>来自 mini HTTP server</h1>\n"
+        )
+    with open(
+        os.path.join(static_root, "sample.txt"), "w", encoding="utf-8"
+    ) as fh:
         fh.write("这是一个静态文本文件，由 socket 服务器直接读出。\n")
     print(f"  静态目录: {static_root}")
 
@@ -435,24 +541,34 @@ def main() -> None:
 
     @server.route("GET", "/hello")
     def hello(request: Request) -> Response:
-        return Response(200, headers={"Content-Type": "text/plain; charset=utf-8"},
-                        body=f"hello, 这是动态路由 {request.path}?{request.query}\n".encode())
+        return Response(
+            200,
+            headers={"Content-Type": "text/plain; charset=utf-8"},
+            body=f"hello, 这是动态路由 {request.path}?{request.query}\n".encode(),
+        )
 
     @server.route("GET", "/stats")
     def stats(request: Request) -> Response:
         uptime = time.time() - server.start_time
-        body = (f"uptime={uptime:.2f}s\nrequests={len(server.log_lines)}\n"
-                f"threads={threading.active_count()}\n").encode()
+        body = (
+            f"uptime={uptime:.2f}s\nrequests={len(server.log_lines)}\n"
+            f"threads={threading.active_count()}\n"
+        ).encode()
         return Response(200, body=body)
 
     @server.route("POST", "/echo")
     def echo(request: Request) -> Response:
-        return Response(200, headers={"Content-Type": "application/octet-stream"},
-                        body=b"echo:" + request.body)
+        return Response(
+            200,
+            headers={"Content-Type": "application/octet-stream"},
+            body=b"echo:" + request.body,
+        )
 
     threading.Thread(target=server.serve_forever, daemon=True).start()
     host, port = server.address
-    print(f"  服务器已启动: http://{host}:{port}   （每连接一个线程 + keep-alive + 5 秒空闲超时）")
+    print(
+        f"  服务器已启动: http://{host}:{port}   （每连接一个线程 + keep-alive + 5 秒空闲超时）"
+    )
 
     # ---------------------------------------------------------------- 第 3 步
     title("第 3 步：自带测试（真连真发，不是 mock）")
@@ -463,7 +579,7 @@ def main() -> None:
     title("第 4 步：访问日志（服务器视角看到了什么）")
     for line in server.log_lines:
         print(f"    {line}")
-    print(f"""
+    print("""
   注意日志里的几个细节:
     * 同一个客户端 IP:端口 出现了多次 -> 那就是 keep-alive 复用连接
     * 每个请求都有耗时, 生产环境要把它做成指标（P50/P99 而不是平均值）
@@ -523,7 +639,7 @@ def main() -> None:
 2. 「读到哪里算一个请求」是全部难点: 头用 \\r\\n\\r\\n, 体用 Content-Length, 缓冲区要保留残留。
 3. 响应必须带 Content-Length; HEAD 只回头不带体; keep-alive 要配合空闲超时。
 4. 安全基线: 路径归一化防穿越、头/体大小上限、异常兜底不让线程崩。
-5. 自测结论: {('全部通过' if passed else '有失败项, 请看上面的 FAIL 行')}
+5. 自测结论: {("全部通过" if passed else "有失败项, 请看上面的 FAIL 行")}
 6. 下一课: 客户端侧, 看标准库/常用库怎么封装这些细节（以及它们的坑）。
 """)
     print("下一课: 05_http/demo_17_http_client_libs.py")

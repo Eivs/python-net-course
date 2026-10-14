@@ -57,9 +57,11 @@ class TcpEchoServer:
       * 业务逻辑不能假设一次 recv 就等于一条消息
     """
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 0, recv_size: int = 4096):
+    def __init__(
+        self, host: str = "127.0.0.1", port: int = 0, recv_size: int = 4096
+    ):
         self.recv_size = recv_size
-        self.received_chunks: list[int] = []      # 记录每次 recv 的字节数, 用于观察
+        self.received_chunks: list[int] = []  # 记录每次 recv 的字节数, 用于观察
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind((host, port))
@@ -84,11 +86,13 @@ class TcpEchoServer:
     def _serve(self, conn: socket.socket) -> None:
         with conn:
             while True:
-                chunk = conn.recv(self.recv_size)     # 一次就是「最多 recv_size 字节」
-                if chunk == b"":                      # EOF: 对端发了 FIN, 不会再有数据
+                chunk = conn.recv(
+                    self.recv_size
+                )  # 一次就是「最多 recv_size 字节」
+                if chunk == b"":  # EOF: 对端发了 FIN, 不会再有数据
                     break
                 self.received_chunks.append(len(chunk))
-                conn.sendall(chunk)                   # 原样回显（sendall 保证全部发出）
+                conn.sendall(chunk)  # 原样回显（sendall 保证全部发出）
             # 退出 with 会对连接做 close(), 触发四次挥手（下一课细讲）
 
     def close(self) -> None:
@@ -121,14 +125,16 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 2 步
     title("第 2 步：EOF 与半关闭，怎么告诉对方「我说完了」")
 
-    client = socket.create_connection(server.address)      # 这是最常用的连接写法
-    print(f"  客户端已连接: 本地端 {client.getsockname()} -> {client.getpeername()}")
+    client = socket.create_connection(server.address)  # 这是最常用的连接写法
+    print(
+        f"  客户端已连接: 本地端 {client.getsockname()} -> {client.getpeername()}"
+    )
 
     client.sendall("第一条消息\n".encode("utf-8"))
     client.sendall("第二条消息\n".encode("utf-8"))
     print("  已发送两条消息, 但先不关闭连接")
 
-    client.shutdown(socket.SHUT_WR)          # 半关闭: 只关「我发」的方向, 我还能收
+    client.shutdown(socket.SHUT_WR)  # 半关闭: 只关「我发」的方向, 我还能收
     print("""  调用 shutdown(SHUT_WR):
       内核发出 FIN, 但本端仍可 recv。服务端会读到 b"" 从而知道「客户端说完了」。
   这与 close() 的区别很关键:
@@ -143,7 +149,7 @@ def main() -> None:
     while True:
         chunk = client.recv(4096)
         if not chunk:
-            break                            # 服务端也关闭了 -> 整个连接结束
+            break  # 服务端也关闭了 -> 整个连接结束
         echo += chunk
     print(f"  客户端收到回显 {len(echo)} 字节: {echo!r}")
     client.close()
@@ -153,11 +159,13 @@ def main() -> None:
 
     server.received_chunks.clear()
     big_client = socket.create_connection(server.address)
-    payload = (b"0123456789abcdef" * 65536)          # 1 MiB
-    print(f"  准备发送 {len(payload)} 字节（1 MiB）, 服务端 recv 上限 = {server.recv_size} 字节")
+    payload = b"0123456789abcdef" * 65536  # 1 MiB
+    print(
+        f"  准备发送 {len(payload)} 字节（1 MiB）, 服务端 recv 上限 = {server.recv_size} 字节"
+    )
 
     start = time.perf_counter()
-    big_client.sendall(payload)                      # sendall 内部自动循环, 保证全部发出
+    big_client.sendall(payload)  # sendall 内部自动循环, 保证全部发出
     big_client.shutdown(socket.SHUT_WR)
 
     received = bytearray()
@@ -168,7 +176,7 @@ def main() -> None:
         received += chunk
     elapsed = time.perf_counter() - start
     big_client.close()
-    time.sleep(0.3)                                  # 等服务端线程把统计写完
+    time.sleep(0.3)  # 等服务端线程把统计写完
 
     chunks = server.received_chunks
     print(f"""
@@ -205,16 +213,20 @@ def main() -> None:
     def accept_but_never_read() -> None:
         conn, _ = silent_server.accept()
         accepted.append(conn)
-        time.sleep(6)            # 关键: 故意不 recv, 让对端缓冲区填满
+        time.sleep(6)  # 关键: 故意不 recv, 让对端缓冲区填满
 
     t = threading.Thread(target=accept_but_never_read, daemon=True)
     t.start()
 
     raw = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    raw.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8192)      # 故意把发送缓冲调小
+    raw.setsockopt(
+        socket.SOL_SOCKET, socket.SO_SNDBUF, 8192
+    )  # 故意把发送缓冲调小
     raw.connect(silent_addr)
-    raw.setblocking(False)                                        # 非阻塞, 满了就报错
-    print(f"  SO_SNDBUF 设为 8192（系统实际给 {raw.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)}）")
+    raw.setblocking(False)  # 非阻塞, 满了就报错
+    print(
+        f"  SO_SNDBUF 设为 8192（系统实际给 {raw.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)}）"
+    )
 
     block = b"x" * 65536
     parts: list[int] = []
@@ -225,13 +237,19 @@ def main() -> None:
             parts.append(sent)
             total += sent
     except BlockingIOError:
-        print(f"  第 {len(parts) + 1} 次 send -> BlockingIOError（缓冲区满了, 非阻塞下立刻报错）")
+        print(
+            f"  第 {len(parts) + 1} 次 send -> BlockingIOError（缓冲区满了, 非阻塞下立刻报错）"
+        )
     except OSError as exc:
         print(f"  发送中断: {type(exc).__name__}: {exc}")
     finally:
-        print(f"  成功 send 了 {len(parts)} 次, 累计 {total} 字节, 每次返回: {parts[:8]}{' ...' if len(parts) > 8 else ''}")
-        print("  （成功次数随内核何时回收缓冲区而波动: 本机多次运行会看到 1~2 次,"
-              "但都远小于这里尝试的 200 次）")
+        print(
+            f"  成功 send 了 {len(parts)} 次, 累计 {total} 字节, 每次返回: {parts[:8]}{' ...' if len(parts) > 8 else ''}"
+        )
+        print(
+            "  （成功次数随内核何时回收缓冲区而波动: 本机多次运行会看到 1~2 次,"
+            "但都远小于这里尝试的 200 次）"
+        )
         print("""
   看到没: send 返回 65536 是一次的量, 但缓冲区小的时候它可能只返回一部分。
   所以:
@@ -250,8 +268,8 @@ def main() -> None:
     lines = [f"{i:04d}" for i in range(1, 201)]
 
     payload_lines = ("\n".join(lines) + "\n").encode()
-    for i in range(0, len(payload_lines), 37):        # 故意切成 37 字节的小块发送
-        ordered_client.sendall(payload_lines[i:i + 37])
+    for i in range(0, len(payload_lines), 37):  # 故意切成 37 字节的小块发送
+        ordered_client.sendall(payload_lines[i : i + 37])
     ordered_client.shutdown(socket.SHUT_WR)
 
     back = b""

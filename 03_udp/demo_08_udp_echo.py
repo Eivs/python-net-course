@@ -48,9 +48,13 @@ def title(text: str) -> None:
     print("=" * 74)
 
 
-def start_udp_echo_server(ready: threading.Event, holder: dict, stop: threading.Event) -> None:
+def start_udp_echo_server(
+    ready: threading.Event, holder: dict, stop: threading.Event
+) -> None:
     """一个最小 UDP 服务端: 收到什么就原样发回去。"""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)      # SOCK_DGRAM = 数据报 = UDP
+    sock = socket.socket(
+        socket.AF_INET, socket.SOCK_DGRAM
+    )  # SOCK_DGRAM = 数据报 = UDP
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", 0))
     holder["server_addr"] = sock.getsockname()
@@ -59,16 +63,18 @@ def start_udp_echo_server(ready: threading.Event, holder: dict, stop: threading.
     while not stop.is_set():
         try:
             sock.settimeout(0.5)
-            data, peer = sock.recvfrom(65535)      # 一个数据报, 一次收完
+            data, peer = sock.recvfrom(65535)  # 一个数据报, 一次收完
         except socket.timeout:
             continue
         except OSError:
             break
         holder.setdefault("received", []).append((data, peer))
         try:
-            sock.sendto(b"echo:" + data, peer)     # 回给来源地址（每个包都带地址, 不需要连接）
+            sock.sendto(
+                b"echo:" + data, peer
+            )  # 回给来源地址（每个包都带地址, 不需要连接）
         except OSError:
-            pass     # 回包太大时发送会失败, 服务端不该因此崩掉（UDP 的现实之一）
+            pass  # 回包太大时发送会失败, 服务端不该因此崩掉（UDP 的现实之一）
     sock.close()
 
 
@@ -78,12 +84,16 @@ def main() -> None:
 
     ready, stop = threading.Event(), threading.Event()
     holder: dict = {}
-    server_thread = threading.Thread(target=start_udp_echo_server, args=(ready, holder, stop), daemon=True)
+    server_thread = threading.Thread(
+        target=start_udp_echo_server, args=(ready, holder, stop), daemon=True
+    )
     server_thread.start()
     ready.wait(timeout=5)
     server_addr = holder["server_addr"]
 
-    print(f"  UDP 服务端已就绪: {server_addr}（注意: 它没有 LISTEN 状态, 因为没有连接）")
+    print(
+        f"  UDP 服务端已就绪: {server_addr}（注意: 它没有 LISTEN 状态, 因为没有连接）"
+    )
     print("""  UDP 服务端代码只有三步:
       socket(AF_INET, SOCK_DGRAM)   # 建一个数据报 socket
       bind((host, port))            # 占住端口
@@ -109,7 +119,9 @@ def main() -> None:
     print("  连续 sendto 三次（没有等待、没有握手、三条消息互不相关）")
     for i in range(1, 4):
         data, _ = client.recvfrom(65535)
-        print(f"  recvfrom -> {data!r}   <- 每次都是独立的一条, 不会像 TCP 那样粘在一起")
+        print(
+            f"  recvfrom -> {data!r}   <- 每次都是独立的一条, 不会像 TCP 那样粘在一起"
+        )
 
     print("""
   记住这个对比, 第 12 课会用它来反衬 TCP:
@@ -122,10 +134,14 @@ def main() -> None:
 
     connected = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     connected.settimeout(3)
-    connected.connect(server_addr)          # 关键: UDP 的 connect 不发任何包
-    print(f"  connect({server_addr}) 之后: getsockname()={connected.getsockname()} getpeername()={connected.getpeername()}")
-    connected.send(b"connected-mode")       # 可以用 send/recv, 不用每次写地址
-    data = connected.recv(65535)            # 注意: 连接过的 socket 用 recv, 返回值只有数据, 没有地址
+    connected.connect(server_addr)  # 关键: UDP 的 connect 不发任何包
+    print(
+        f"  connect({server_addr}) 之后: getsockname()={connected.getsockname()} getpeername()={connected.getpeername()}"
+    )
+    connected.send(b"connected-mode")  # 可以用 send/recv, 不用每次写地址
+    data = connected.recv(
+        65535
+    )  # 注意: 连接过的 socket 用 recv, 返回值只有数据, 没有地址
     print(f"  用 send()/recv() 收发成功: {data!r}")
 
     print("""
@@ -144,10 +160,14 @@ def main() -> None:
   下面把接收缓冲区故意设小(2048 字节), 然后一口气发 500 个 100 字节的包。
 """)
     slow_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    slow_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2048)     # 缩小接收缓冲
+    slow_sock.setsockopt(
+        socket.SOL_SOCKET, socket.SO_RCVBUF, 2048
+    )  # 缩小接收缓冲
     slow_sock.bind(("127.0.0.1", 0))
     actual_buf = slow_sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
-    print(f"  SO_RCVBUF 设为 2048, 系统实际给出 {actual_buf}（内核有最小值限制）")
+    print(
+        f"  SO_RCVBUF 设为 2048, 系统实际给出 {actual_buf}（内核有最小值限制）"
+    )
 
     burst = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     total = 500
@@ -156,7 +176,7 @@ def main() -> None:
         ordered.append(seq)
         burst.sendto(f"{seq:04d}".encode() + b"x" * 96, slow_sock.getsockname())
 
-    time.sleep(0.2)          # 故意不读, 让缓冲区在数据到达期间保持爆满
+    time.sleep(0.2)  # 故意不读, 让缓冲区在数据到达期间保持爆满
     got = []
     slow_sock.settimeout(0.3)
     while True:
@@ -210,8 +230,12 @@ def main() -> None:
                 low = mid
             else:
                 high = mid
-        print(f"\n  二分实测: 本机回环上最大可发 UDP 载荷 = {low} 字节（{low + 1} 就报 Message too long）")
-        print(f"  注意这个数字远小于理论值 65507, 因为本机回环 MTU 与内核发送缓冲(uio/驱动)共同限制。")
+        print(
+            f"\n  二分实测: 本机回环上最大可发 UDP 载荷 = {low} 字节（{low + 1} 就报 Message too long）"
+        )
+        print(
+            "  注意这个数字远小于理论值 65507, 因为本机回环 MTU 与内核发送缓冲(uio/驱动)共同限制。"
+        )
 
     print("""
   几个关键数字:
@@ -240,7 +264,7 @@ def main() -> None:
     dead = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dead.bind(("127.0.0.1", 0))
     dead_port = dead.getsockname()[1]
-    dead.close()          # 端口现在已经没人监听了
+    dead.close()  # 端口现在已经没人监听了
 
     conn_dead = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     conn_dead.connect(("127.0.0.1", dead_port))
@@ -251,9 +275,13 @@ def main() -> None:
         print(f"  竟然收到回应: {data!r}")
     except ConnectionRefusedError as exc:
         print(f"  收到 ConnectionRefusedError: {exc}")
-        print("      <- 这就是 ICMP port unreachable 被内核翻译过来的结果, 说明 UDP 也不是完全瞎")
+        print(
+            "      <- 这就是 ICMP port unreachable 被内核翻译过来的结果, 说明 UDP 也不是完全瞎"
+        )
     except socket.timeout:
-        print("  超时了（这次 ICMP 没回来, UDP 的错误反馈本来就是「尽力而为」的）")
+        print(
+            "  超时了（这次 ICMP 没回来, UDP 的错误反馈本来就是「尽力而为」的）"
+        )
     finally:
         conn_dead.close()
 

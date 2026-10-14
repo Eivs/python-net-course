@@ -44,11 +44,14 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:                                    # 复用第 16 课写的服务器, 顺便说明「组件化」的价值
+try:  # 复用第 16 课写的服务器, 顺便说明「组件化」的价值
     from demo_16_mini_http_server import HttpServer, Request, Response
+
     HAVE_MINI_SERVER = True
-except ImportError as exc:              # pragma: no cover
-    print(f"  [提示] 无法导入 demo_16 的 HttpServer（{exc}）, 本课将跳过本地实验。")
+except ImportError as exc:  # pragma: no cover
+    print(
+        f"  [提示] 无法导入 demo_16 的 HttpServer（{exc}）, 本课将跳过本地实验。"
+    )
     HAVE_MINI_SERVER = False
 
 
@@ -65,9 +68,15 @@ def build_server() -> tuple[HttpServer, str]:
 
     @server.route("GET", "/json")
     def json_route(request: Request) -> Response:
-        payload = json.dumps({"ok": True, "path": request.path, "query": request.query},
-                             ensure_ascii=False).encode()
-        return Response(200, headers={"Content-Type": "application/json; charset=utf-8"}, body=payload)
+        payload = json.dumps(
+            {"ok": True, "path": request.path, "query": request.query},
+            ensure_ascii=False,
+        ).encode()
+        return Response(
+            200,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            body=payload,
+        )
 
     @server.route("GET", "/redirect")
     def redirect_route(request: Request) -> Response:
@@ -75,22 +84,32 @@ def build_server() -> tuple[HttpServer, str]:
 
     @server.route("GET", "/slow")
     def slow_route(request: Request) -> Response:
-        time.sleep(1.0)                      # 故意慢 1 秒, 用来演示超时
+        time.sleep(1.0)  # 故意慢 1 秒, 用来演示超时
         return Response(200, body=b"slow-response\n")
 
     @server.route("GET", "/big")
     def big_route(request: Request) -> Response:
-        return Response(200, headers={"Content-Type": "application/octet-stream"},
-                        body=b"0123456789" * 200_000)      # 2 MB
+        return Response(
+            200,
+            headers={"Content-Type": "application/octet-stream"},
+            body=b"0123456789" * 200_000,
+        )  # 2 MB
 
     @server.route("GET", "/gzip")
     def gzip_route(request: Request) -> Response:
         raw = ("压缩内容 " * 2000).encode("utf-8")
         if "gzip" in request.headers.get("accept-encoding", ""):
-            return Response(200, headers={"Content-Type": "text/plain; charset=utf-8",
-                                          "Content-Encoding": "gzip"},
-                            body=gzip.compress(raw))
-        return Response(200, headers={"Content-Type": "text/plain; charset=utf-8"}, body=raw)
+            return Response(
+                200,
+                headers={
+                    "Content-Type": "text/plain; charset=utf-8",
+                    "Content-Encoding": "gzip",
+                },
+                body=gzip.compress(raw),
+            )
+        return Response(
+            200, headers={"Content-Type": "text/plain; charset=utf-8"}, body=raw
+        )
 
     @server.route("POST", "/api")
     def api_route(request: Request) -> Response:
@@ -98,14 +117,20 @@ def build_server() -> tuple[HttpServer, str]:
             data = json.loads(request.body.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             return Response(400, body=b"bad json\n")
-        return Response(200, headers={"Content-Type": "application/json"},
-                        body=json.dumps({"echo": data, "len": len(request.body)}).encode())
+        return Response(
+            200,
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"echo": data, "len": len(request.body)}).encode(),
+        )
 
     @server.route("GET", "/cookie")
     def cookie_route(request: Request) -> Response:
         seen = request.headers.get("cookie", "(没有 cookie)")
-        return Response(200, headers={"Set-Cookie": "session=abc123; Path=/"},
-                        body=f"server saw: {seen}\n".encode())
+        return Response(
+            200,
+            headers={"Set-Cookie": "session=abc123; Path=/"},
+            body=f"server saw: {seen}\n".encode(),
+        )
 
     threading.Thread(target=server.serve_forever, daemon=True).start()
     host, port = server.address
@@ -128,13 +153,15 @@ def main() -> None:
     print(f"  状态: {resp.status} {resp.reason}")
     print(f"  版本: {resp.version}（11 = HTTP/1.1）")
     print(f"  头: Content-Type={resp.getheader('Content-Type')}")
-    body = resp.read()                      # 必须读掉 body, 否则连接不能复用
+    body = resp.read()  # 必须读掉 body, 否则连接不能复用
     print(f"  body: {body.decode()}")
 
     # 复用同一条连接再发一次（响应必须读干净）
     conn.request("GET", "/json?x=1")
     resp2 = conn.getresponse()
-    print(f"  第二次请求复用连接: {resp2.status}, 服务端看到的路径 {json.loads(resp2.read())['query']}")
+    print(
+        f"  第二次请求复用连接: {resp2.status}, 服务端看到的路径 {json.loads(resp2.read())['query']}"
+    )
     conn.close()
 
     print("""
@@ -154,15 +181,19 @@ def main() -> None:
     chunks = 0
     started = time.perf_counter()
     while True:
-        chunk = resp.read(64 * 1024)         # 64KB 一块, 内存占用恒定
+        chunk = resp.read(64 * 1024)  # 64KB 一块, 内存占用恒定
         if not chunk:
             break
         read_bytes += len(chunk)
         chunks += 1
     elapsed = time.perf_counter() - started
     conn.close()
-    print(f"  流式下载 2MB: 收到 {read_bytes} 字节/{chunks} 块, 耗时 {elapsed * 1000:.0f} ms")
-    print(f"    Content-Length 声明 {total}, 实收 {read_bytes} -> 一致: {total == read_bytes}")
+    print(
+        f"  流式下载 2MB: 收到 {read_bytes} 字节/{chunks} 块, 耗时 {elapsed * 1000:.0f} ms"
+    )
+    print(
+        f"    Content-Length 声明 {total}, 实收 {read_bytes} -> 一致: {total == read_bytes}"
+    )
     print("""    生产代码必须这样写: 一次 read() 一个大文件会直接把内存吃满（OOM 的常见来源）。
     注意「Content-Length 声明值」和「实收字节数」一定要核对, 这是防截断/防中间人篡改的基本动作。
 """)
@@ -180,7 +211,9 @@ def main() -> None:
         bad.request("GET", "/")
         bad.getresponse()
     except (socket.timeout, OSError) as exc:
-        print(f"  1 秒超时生效: {type(exc).__name__}: {exc}（等了 {time.perf_counter() - started:.2f}s）")
+        print(
+            f"  1 秒超时生效: {type(exc).__name__}: {exc}（等了 {time.perf_counter() - started:.2f}s）"
+        )
 
     # 服务端故意慢 1 秒, 客户端设 0.3 秒 -> 读超时
     started = time.perf_counter()
@@ -189,8 +222,10 @@ def main() -> None:
         conn.request("GET", "/slow")
         conn.getresponse()
     except (socket.timeout, OSError) as exc:
-        print(f"  读超时生效: {type(exc).__name__}（等了 {time.perf_counter() - started:.2f}s, "
-              f"服务端要 1 秒才回）")
+        print(
+            f"  读超时生效: {type(exc).__name__}（等了 {time.perf_counter() - started:.2f}s, "
+            f"服务端要 1 秒才回）"
+        )
     finally:
         conn.close()
 
@@ -208,7 +243,10 @@ def main() -> None:
     title("第 3 步：urllib.request —— 标准库高层，自动重定向 + cookie")
 
     # GET 带自定义头
-    req = urllib.request.Request(f"{base}/json", headers={"X-Course": "networking", "User-Agent": "demo_17/1.0"})
+    req = urllib.request.Request(
+        f"{base}/json",
+        headers={"X-Course": "networking", "User-Agent": "demo_17/1.0"},
+    )
     with urllib.request.urlopen(req, timeout=3) as resp:
         print(f"  GET /json -> {resp.status}, body={resp.read().decode()}")
 
@@ -226,27 +264,41 @@ def main() -> None:
 
     # POST JSON
     payload = json.dumps({"name": "张三", "n": 3}).encode("utf-8")
-    req = urllib.request.Request(f"{base}/api", data=payload, method="POST",
-                                headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(
+        f"{base}/api",
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
     with urllib.request.urlopen(req, timeout=3) as resp:
         print(f"  POST /api -> {resp.status}, 返回 {resp.read().decode()}")
-    print("    注意 Content-Length 是按字节算的（中文 3 字节/字）, 第 15 课踩过这个坑。")
+    print(
+        "    注意 Content-Length 是按字节算的（中文 3 字节/字）, 第 15 课踩过这个坑。"
+    )
 
     # 错误码: urllib 对 4xx/5xx 抛 HTTPError
     try:
         urllib.request.urlopen(f"{base}/nope", timeout=3)
     except urllib.error.HTTPError as exc:
-        print(f"  GET /nope -> HTTPError {exc.code}（urllib 把 4xx/5xx 当异常抛, 这是它的设计选择）")
+        print(
+            f"  GET /nope -> HTTPError {exc.code}（urllib 把 4xx/5xx 当异常抛, 这是它的设计选择）"
+        )
     except urllib.error.URLError as exc:
         print(f"  GET /nope -> URLError {exc}")
 
     # cookie: urlopen 不带 cookie 会话, 要用 opener
     jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(jar)
+    )
     with opener.open(f"{base}/cookie", timeout=3) as resp:
-        print(f"  第一次 /cookie -> {resp.read().decode().strip()}  （服务端下发了 cookie）")
+        print(
+            f"  第一次 /cookie -> {resp.read().decode().strip()}  （服务端下发了 cookie）"
+        )
     with opener.open(f"{base}/cookie", timeout=3) as resp:
-        print(f"  第二次 /cookie -> {resp.read().decode().strip()}  （cookie 被自动带上）")
+        print(
+            f"  第二次 /cookie -> {resp.read().decode().strip()}  （cookie 被自动带上）"
+        )
     print(f"    本地 cookie 罐: {[c.name + '=' + c.value for c in jar]}")
 
     # ---------------------------------------------------------------- 第 4 步
@@ -255,16 +307,24 @@ def main() -> None:
     plain = urllib.request.Request(f"{base}/gzip")
     with urllib.request.urlopen(plain, timeout=3) as resp:
         body_plain = resp.read()
-        print(f"  未请求压缩: 收到 {len(body_plain)} 字节, Content-Encoding={resp.getheader('Content-Encoding')}")
+        print(
+            f"  未请求压缩: 收到 {len(body_plain)} 字节, Content-Encoding={resp.getheader('Content-Encoding')}"
+        )
 
-    gz = urllib.request.Request(f"{base}/gzip", headers={"Accept-Encoding": "gzip"})
+    gz = urllib.request.Request(
+        f"{base}/gzip", headers={"Accept-Encoding": "gzip"}
+    )
     with urllib.request.urlopen(gz, timeout=3) as resp:
         body_gz = resp.read()
         encoding = resp.getheader("Content-Encoding")
-        print(f"  请求 gzip : 收到 {len(body_gz)} 字节, Content-Encoding={encoding}")
+        print(
+            f"  请求 gzip : 收到 {len(body_gz)} 字节, Content-Encoding={encoding}"
+        )
         if encoding == "gzip":
-            print(f"    手动解压后 {len(gzip.decompress(body_gz))} 字节, 与原文一致: "
-                  f"{gzip.decompress(body_gz) == body_plain}")
+            print(
+                f"    手动解压后 {len(gzip.decompress(body_gz))} 字节, 与原文一致: "
+                f"{gzip.decompress(body_gz) == body_plain}"
+            )
     print(f"""
   压缩率: {len(body_gz)} / {len(body_plain)} = {len(body_gz) / max(len(body_plain), 1):.1%}
     * urllib 不会自动解压, 你得自己处理 Content-Encoding（requests 会自动解）
@@ -277,23 +337,35 @@ def main() -> None:
     title("第 5 步：requests 风格的最佳实践")
 
     try:
-        import requests                                     # type: ignore
+        import requests  # type: ignore
+
         HAVE_REQUESTS = True
     except ImportError:
         HAVE_REQUESTS = False
 
     if HAVE_REQUESTS:
-        import requests                                     # type: ignore
+        import requests  # type: ignore
+
         print(f"  检测到 requests {requests.__version__}, 真跑一遍:")
-        with requests.Session() as session:                  # Session = 连接池 + cookie 罐
-            resp = session.get(f"{base}/json", timeout=(1, 2))     # (连接超时, 读超时)
-            resp.raise_for_status()                                # 4xx/5xx 主动抛异常
-            print(f"    session.get /json -> {resp.status_code}, json={resp.json()}")
-            resp = session.post(f"{base}/api", json={"hello": "世界"}, timeout=2)
+        with requests.Session() as session:  # Session = 连接池 + cookie 罐
+            resp = session.get(
+                f"{base}/json", timeout=(1, 2)
+            )  # (连接超时, 读超时)
+            resp.raise_for_status()  # 4xx/5xx 主动抛异常
+            print(
+                f"    session.get /json -> {resp.status_code}, json={resp.json()}"
+            )
+            resp = session.post(
+                f"{base}/api", json={"hello": "世界"}, timeout=2
+            )
             print(f"    session.post /api -> {resp.status_code}, {resp.json()}")
-            print(f"    同一个 Session 复用连接: 底层走了连接池（默认 10 个连接）")
+            print(
+                "    同一个 Session 复用连接: 底层走了连接池（默认 10 个连接）"
+            )
     else:
-        print("  未安装 requests（pip install requests 可体验）, 下面用 urllib 演示等价代码:")
+        print(
+            "  未安装 requests（pip install requests 可体验）, 下面用 urllib 演示等价代码:"
+        )
     print("""    # requests 的等价写法注释版（本课重点在这里, 而不是库的 API 细节）
 
     import requests
@@ -336,7 +408,9 @@ def main() -> None:
             print(f"    {resp.status}  最终地址 {resp.geturl()}")
             print(f"    Server 头: {resp.getheader('Server')}")
     except urllib.error.HTTPError as exc:
-        print(f"    HTTPError {exc.code}, Location={exc.headers.get('Location')}")
+        print(
+            f"    HTTPError {exc.code}, Location={exc.headers.get('Location')}"
+        )
     except (urllib.error.URLError, OSError) as exc:
         print(f"    网络不可用, 跳过: {exc}")
 

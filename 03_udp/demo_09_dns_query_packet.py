@@ -79,7 +79,7 @@ def title(text: str) -> None:
 def hexdump(data: bytes, prefix: str = "    ") -> None:
     """经典 hexdump: 偏移 + 十六进制 + ASCII。看协议必用的工具。"""
     for offset in range(0, len(data), 16):
-        chunk = data[offset:offset + 16]
+        chunk = data[offset : offset + 16]
         hex_part = " ".join(f"{b:02x}" for b in chunk)
         ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
         print(f"{prefix}{offset:04x}  {hex_part:<47}  {ascii_part}")
@@ -96,21 +96,25 @@ def encode_name(name: str) -> bytes:
         raw = label.encode("ascii")
         if not 1 <= len(raw) <= 63:
             raise ValueError(f"标签长度必须在 1~63 之间: {label!r}")
-        out.append(len(raw))          # 关键: 长度是「一个字节」
+        out.append(len(raw))  # 关键: 长度是「一个字节」
         out += raw
-    out.append(0)                     # 根标签, 表示域名结束
+    out.append(0)  # 根标签, 表示域名结束
     return bytes(out)
 
 
-def build_query(domain: str, qtype: int = 1, txid: int | None = None) -> tuple[bytes, int]:
+def build_query(
+    domain: str, qtype: int = 1, txid: int | None = None
+) -> tuple[bytes, int]:
     """拼一个完整的 DNS 查询报文, 返回 (报文字节, 事务ID)。"""
     if txid is None:
-        txid = random.randint(0, 0xFFFF)          # 随机事务 ID, 见本课后半段的讨论
+        txid = random.randint(0, 0xFFFF)  # 随机事务 ID, 见本课后半段的讨论
 
     # 12 字节头: ID, Flags, QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT（全部大端 !HHHHHH）
     # Flags = 0x0100 表示: QR=0(查询) Opcode=0(标准查询) RD=1(希望递归)
     header = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0)
-    question = encode_name(domain) + struct.pack("!HH", qtype, 1)   # QTYPE, QCLASS=1(IN)
+    question = encode_name(domain) + struct.pack(
+        "!HH", qtype, 1
+    )  # QTYPE, QCLASS=1(IN)
     return header + question, txid
 
 
@@ -131,26 +135,26 @@ def parse_name(data: bytes, offset: int) -> tuple[str, int]:
             raise ValueError("报文在解析域名时越界")
         length = data[offset]
 
-        if length & 0xC0 == 0xC0:                    # 前两位是 11 -> 压缩指针
+        if length & 0xC0 == 0xC0:  # 前两位是 11 -> 压缩指针
             if offset + 1 >= len(data):
                 raise ValueError("指针不完整")
-            pointer = struct.unpack("!H", data[offset:offset + 2])[0] & 0x3FFF
+            pointer = struct.unpack("!H", data[offset : offset + 2])[0] & 0x3FFF
             if not jumped:
-                next_offset = offset + 2             # 只记第一次的"真实后续位置"
+                next_offset = offset + 2  # 只记第一次的"真实后续位置"
             offset = pointer
             jumped = True
             hops += 1
-            if hops > 20:                            # 防止恶意报文造成死循环
+            if hops > 20:  # 防止恶意报文造成死循环
                 raise ValueError("指针跳转次数过多, 可能是恶意报文")
             continue
 
-        if length == 0:                              # 根标签 -> 域名结束
+        if length == 0:  # 根标签 -> 域名结束
             if not jumped:
                 next_offset = offset + 1
             break
 
         offset += 1
-        labels.append(data[offset:offset + length].decode("ascii", "replace"))
+        labels.append(data[offset : offset + length].decode("ascii", "replace"))
         offset += length
 
     return ".".join(labels), next_offset
@@ -170,35 +174,49 @@ def parse_response(data: bytes, expect_txid: int) -> dict:
         "rcode": flags & 0x000F,
         "tc": (flags >> 9) & 1,
         "ra": (flags >> 7) & 1,
-        "qdcount": qd, "ancount": an, "nscount": ns, "arcount": ar,
-        "questions": [], "answers": [], "authorities": [], "additionals": [],
+        "qdcount": qd,
+        "ancount": an,
+        "nscount": ns,
+        "arcount": ar,
+        "questions": [],
+        "answers": [],
+        "authorities": [],
+        "additionals": [],
     }
 
     offset = 12
     for _ in range(qd):
         name, offset = parse_name(data, offset)
-        qtype, qclass = struct.unpack("!HH", data[offset:offset + 4])
+        qtype, qclass = struct.unpack("!HH", data[offset : offset + 4])
         offset += 4
         result["questions"].append((name, qtype, qclass))
 
-    for section, count in (("answers", an), ("authorities", ns), ("additionals", ar)):
+    for section, count in (
+        ("answers", an),
+        ("authorities", ns),
+        ("additionals", ar),
+    ):
         for _ in range(count):
             name, offset = parse_name(data, offset)
-            rtype, rclass, ttl, rdlength = struct.unpack("!HHIH", data[offset:offset + 10])
+            rtype, rclass, ttl, rdlength = struct.unpack(
+                "!HHIH", data[offset : offset + 10]
+            )
             offset += 10
-            rdata = data[offset:offset + rdlength]
+            rdata = data[offset : offset + rdlength]
             offset += rdlength
 
             value: str
-            if rtype == 1 and rdlength == 4:                  # A 记录
+            if rtype == 1 and rdlength == 4:  # A 记录
                 value = socket.inet_ntoa(rdata)
-            elif rtype == 28 and rdlength == 16:              # AAAA 记录
+            elif rtype == 28 and rdlength == 16:  # AAAA 记录
                 value = socket.inet_ntop(socket.AF_INET6, rdata)
-            elif rtype in (2, 5):                             # NS / CNAME: rdata 里是域名
+            elif rtype in (2, 5):  # NS / CNAME: rdata 里是域名
                 value, _ = parse_name(data, offset - rdlength)
             else:
                 value = rdata.hex()
-            result[section].append({"name": name, "type": rtype, "ttl": ttl, "value": value})
+            result[section].append(
+                {"name": name, "type": rtype, "ttl": ttl, "value": value}
+            )
     return result
 
 
@@ -207,8 +225,13 @@ def system_resolvers() -> list[str]:
     """macOS: scutil --dns；Linux: /etc/resolv.conf。"""
     servers: list[str] = []
     try:
-        out = subprocess.run(["scutil", "--dns"], capture_output=True, text=True,
-                             errors="replace", timeout=5).stdout
+        out = subprocess.run(
+            ["scutil", "--dns"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=5,
+        ).stdout
         for line in out.splitlines():
             if "nameserver" in line:
                 ip = line.split(":")[-1].strip()
@@ -218,7 +241,9 @@ def system_resolvers() -> list[str]:
         pass
     if not servers:
         try:
-            with open("/etc/resolv.conf", encoding="utf-8", errors="replace") as fh:
+            with open(
+                "/etc/resolv.conf", encoding="utf-8", errors="replace"
+            ) as fh:
                 for line in fh:
                     if line.startswith("nameserver"):
                         servers.append(line.split()[1])
@@ -227,14 +252,16 @@ def system_resolvers() -> list[str]:
     return servers
 
 
-def query_over_udp(server: str, packet: bytes, txid: int, timeout: float = 3.0) -> bytes:
+def query_over_udp(
+    server: str, packet: bytes, txid: int, timeout: float = 3.0
+) -> bytes:
     """发出去并等响应。这里自己做超时重试, 因为 UDP 不保证送达。"""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)     # UDP!
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP!
     sock.settimeout(timeout)
     try:
         start = time.perf_counter()
         sock.sendto(packet, (server, 53))
-        data, _ = sock.recvfrom(4096)                          # 512 是传统上限, 4096 是常见做法
+        data, _ = sock.recvfrom(4096)  # 512 是传统上限, 4096 是常见做法
         print(f"  往返耗时 {(time.perf_counter() - start) * 1000:.1f} ms")
         return data
     finally:
@@ -243,7 +270,11 @@ def query_over_udp(server: str, packet: bytes, txid: int, timeout: float = 3.0) 
 
 def main() -> None:
     domain = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_DOMAIN
-    candidates = [sys.argv[2]] if len(sys.argv) > 2 else DEFAULT_RESOLVERS + system_resolvers()
+    candidates = (
+        [sys.argv[2]]
+        if len(sys.argv) > 2
+        else DEFAULT_RESOLVERS + system_resolvers()
+    )
 
     # ---------------------------------------------------------------- 第 1 步
     title("第 1 步：把域名编码成 DNS 线上格式")
@@ -254,17 +285,19 @@ def main() -> None:
         print(f"    {d:<28} -> {encoded!r}   ({len(encoded)} 字节)")
 
     packet, txid = build_query(domain, qtype=1)
-    print(f"\n  构造出的完整查询报文（共 {len(packet)} 字节, 事务 ID=0x{txid:04X}）:")
+    print(
+        f"\n  构造出的完整查询报文（共 {len(packet)} 字节, 事务 ID=0x{txid:04X}）:"
+    )
     hexdump(packet)
 
     print(f"""
   对着十六进制读一遍:
     0000: {packet[0]:02x} {packet[1]:02x}           <- ID = 0x{txid:04X}
-    0002: {packet[2]:02x} {packet[3]:02x}           <- Flags = 0x{struct.unpack('!H', packet[2:4])[0]:04X} (RD=1 我要递归查询)
+    0002: {packet[2]:02x} {packet[3]:02x}           <- Flags = 0x{struct.unpack("!H", packet[2:4])[0]:04X} (RD=1 我要递归查询)
     0004: {packet[4]:02x} {packet[5]:02x}           <- QDCOUNT = 1（一个问题）
     0006-000b: 全是 00        <- AN/NS/ARCOUNT 都是 0（查询里没有记录）
     000c: {packet[12]:02x}              <- 第一个标签的长度, 后面紧跟 {packet[12]} 个字节的标签内容
-    最后 4 字节: QTYPE={struct.unpack('!H', packet[-4:-2])[0]} (A 记录)  QCLASS={struct.unpack('!H', packet[-2:])[0]} (IN)
+    最后 4 字节: QTYPE={struct.unpack("!H", packet[-4:-2])[0]} (A 记录)  QCLASS={struct.unpack("!H", packet[-2:])[0]} (IN)
 """)
 
     # ---------------------------------------------------------------- 第 2 步
@@ -283,7 +316,9 @@ def main() -> None:
         except OSError as exc:
             print(f"    失败: {type(exc).__name__}: {exc}")
     if response is None:
-        print("\n  所有 DNS 服务器都不可用。本课剩余的解析演示无法进行, 但代码逻辑仍可直接读。")
+        print(
+            "\n  所有 DNS 服务器都不可用。本课剩余的解析演示无法进行, 但代码逻辑仍可直接读。"
+        )
         return
 
     print(f"  收到来自 {used_server} 的响应, 共 {len(response)} 字节")
@@ -296,28 +331,38 @@ def main() -> None:
     parsed = parse_response(response, txid)
     print(f"""
   解析出的头部:
-    事务 ID    = 0x{parsed['txid']:04X}  与请求相同? {parsed['txid_match']}
+    事务 ID    = 0x{parsed["txid"]:04X}  与请求相同? {parsed["txid_match"]}
                 ^^^ 这就是 DNS 用 UDP 还能工作的关键: 靠 ID 配对, 而不是靠连接
-    QR         = {parsed['qr']}  (1 表示这是响应)
-    RA         = {parsed['ra']}  (1 表示对方支持递归查询)
-    TC         = {parsed['tc']}  (1 表示响应被截断, 必须改用 TCP 重问)
-    RCODE      = {parsed['rcode']}  (0=NOERROR, 3=NXDOMAIN 域名不存在)
-    问题数/回答数/权威数/附加数 = {parsed['qdcount']}/{parsed['ancount']}/{parsed['nscount']}/{parsed['arcount']}
+    QR         = {parsed["qr"]}  (1 表示这是响应)
+    RA         = {parsed["ra"]}  (1 表示对方支持递归查询)
+    TC         = {parsed["tc"]}  (1 表示响应被截断, 必须改用 TCP 重问)
+    RCODE      = {parsed["rcode"]}  (0=NOERROR, 3=NXDOMAIN 域名不存在)
+    问题数/回答数/权威数/附加数 = {parsed["qdcount"]}/{parsed["ancount"]}/{parsed["nscount"]}/{parsed["arcount"]}
 """)
 
     for bit, desc in FLAG_BITS:
-        print(f"    flags & {bit:#06x} -> {bool(parsed['flags'] & bit)!s:<5} {desc}")
+        print(
+            f"    flags & {bit:#06x} -> {bool(parsed['flags'] & bit)!s:<5} {desc}"
+        )
 
     # ---------------------------------------------------------------- 第 4 步
     title("第 4 步：解析记录（A 记录的 IP 和 TTL）")
 
     for name, qtype, qclass in parsed["questions"]:
-        print(f"  Question : {name}  type={QTYPE.get(qtype, qtype)} class={QCLASS.get(qclass, qclass)}")
+        print(
+            f"  Question : {name}  type={QTYPE.get(qtype, qtype)} class={QCLASS.get(qclass, qclass)}"
+        )
 
-    for section_name, key in (("Answer ", "answers"), ("Authority", "authorities"), ("Additional", "additionals")):
+    for section_name, key in (
+        ("Answer ", "answers"),
+        ("Authority", "authorities"),
+        ("Additional", "additionals"),
+    ):
         for rec in parsed[key]:
             type_name = QTYPE.get(rec["type"], str(rec["type"]))
-            print(f"  {section_name}: {rec['name']:<28} {type_name:<6} TTL={rec['ttl']:<6} -> {rec['value']}")
+            print(
+                f"  {section_name}: {rec['name']:<28} {type_name:<6} TTL={rec['ttl']:<6} -> {rec['value']}"
+            )
 
     if parsed["answers"]:
         ttl = min(r["ttl"] for r in parsed["answers"])
@@ -333,8 +378,20 @@ def main() -> None:
 
     if shutil.which("dig"):
         out = subprocess.run(
-            ["dig", f"@{used_server}", "+noall", "+answer", "+comments", domain, "A"],
-            capture_output=True, text=True, errors="replace", timeout=10).stdout
+            [
+                "dig",
+                f"@{used_server}",
+                "+noall",
+                "+answer",
+                "+comments",
+                domain,
+                "A",
+            ],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=10,
+        ).stdout
         for line in out.strip().splitlines()[:10]:
             print(f"  {line}")
         print("""

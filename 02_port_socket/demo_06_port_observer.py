@@ -57,7 +57,13 @@ def title(text: str) -> None:
 def sh(cmd: list[str], timeout: float = 10.0) -> list[str]:
     """执行命令并返回非空行列表。"""
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout).stdout
+        out = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=timeout,
+        ).stdout
     except (OSError, subprocess.SubprocessError):
         return []
     return [ln for ln in out.splitlines() if ln.strip()]
@@ -128,7 +134,7 @@ def main() -> None:
 
     clash = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        clash.bind(("127.0.0.1", port))          # 同一个端口, 必然失败
+        clash.bind(("127.0.0.1", port))  # 同一个端口, 必然失败
         print("  居然绑上了（不应该）")
     except OSError as exc:
         print(f"  第二次 bind 127.0.0.1:{port} -> {type(exc).__name__}: {exc}")
@@ -143,8 +149,10 @@ def main() -> None:
         clash.close()
 
     occupant = [ln for ln in listening_sockets() if f":{port}" in ln]
-    print(f"  用 lsof 反查端口 {port} 的占用者: {occupant[0].split()[0] if occupant else '(没找到)'}"
-          f" (PID {occupant[0].split()[1] if occupant else '?'})")
+    print(
+        f"  用 lsof 反查端口 {port} 的占用者: {occupant[0].split()[0] if occupant else '(没找到)'}"
+        f" (PID {occupant[0].split()[1] if occupant else '?'})"
+    )
 
     # ---------------------------------------------------------------- 第 4 步
     title("第 4 步：连接状态分布（TIME_WAIT 是不是堆积了？）")
@@ -181,7 +189,7 @@ def main() -> None:
         local, foreign, state = m.groups()
         if state != "ESTABLISHED":
             continue
-        foreign_ip = foreign.rsplit(".", 1)[0]      # 去掉端口
+        foreign_ip = foreign.rsplit(".", 1)[0]  # 去掉端口
         peers[foreign_ip] += 1
 
     if peers:
@@ -219,13 +227,17 @@ def main() -> None:
             self.sock.listen(16)
             self.address = self.sock.getsockname()
             NamedListener.registry.append(self.address)
-            print(f"  [listener:{self.name}] listening on {self.address[0]}:{self.address[1]} "
-                  f"pid={MY_PID} backlog=16")
+            print(
+                f"  [listener:{self.name}] listening on {self.address[0]}:{self.address[1]} "
+                f"pid={MY_PID} backlog=16"
+            )
 
         def close(self) -> None:
             self.sock.close()
             NamedListener.registry.remove(self.address)
-            print(f"  [listener:{self.name}] closed {self.address[0]}:{self.address[1]}")
+            print(
+                f"  [listener:{self.name}] closed {self.address[0]}:{self.address[1]}"
+            )
 
     demo = NamedListener("demo-service")
     # 再起一个后台线程保持它活着, 主线程做一次连接验证
@@ -265,6 +277,7 @@ def main() -> None:
 
 def errno_name(errno_value: int | None) -> str:
     import errno as errno_mod
+
     if errno_value is None:
         return "?"
     return errno_mod.errorcode.get(errno_value, "未知")

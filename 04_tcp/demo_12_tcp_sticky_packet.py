@@ -62,7 +62,9 @@ def title(text: str) -> None:
     print("=" * 74)
 
 
-def start_echo_server(ready: threading.Event, holder: dict, stop: threading.Event) -> None:
+def start_echo_server(
+    ready: threading.Event, holder: dict, stop: threading.Event
+) -> None:
     """一个「老实巴交」的服务端: 收到什么字节就原样发回, 不做任何边界处理。"""
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -105,7 +107,7 @@ class LengthPrefixedDecoder:
       * 对超长长度做上限校验, 防止恶意报文让你分配 4GB 内存（真实漏洞常见形态）
     """
 
-    HEADER = struct.Struct("!I")          # 4 字节无符号大端
+    HEADER = struct.Struct("!I")  # 4 字节无符号大端
 
     def __init__(self, max_message_size: int = 64 * 1024 * 1024):
         self.buf = bytearray()
@@ -118,15 +120,17 @@ class LengthPrefixedDecoder:
         out: list[bytes] = []
         while True:
             if len(self.buf) < self.HEADER.size:
-                break                                  # 连长度头都不够, 等更多数据
+                break  # 连长度头都不够, 等更多数据
             (length,) = self.HEADER.unpack_from(self.buf, 0)
             if length > self.max_message_size:
-                raise ValueError(f"消息长度 {length} 超过上限, 丢弃连接（防内存攻击）")
+                raise ValueError(
+                    f"消息长度 {length} 超过上限, 丢弃连接（防内存攻击）"
+                )
             total = self.HEADER.size + length
             if len(self.buf) < total:
-                break                                  # body 还没收齐, 等更多数据
-            out.append(bytes(self.buf[self.HEADER.size:total]))
-            del self.buf[:total]                       # 消费掉这条消息
+                break  # body 还没收齐, 等更多数据
+            out.append(bytes(self.buf[self.HEADER.size : total]))
+            del self.buf[:total]  # 消费掉这条消息
             self.messages_decoded += 1
         return out
 
@@ -136,7 +140,9 @@ def encode_length_prefixed(message: bytes) -> bytes:
     return LengthPrefixedDecoder.HEADER.pack(len(message)) + message
 
 
-def start_length_prefixed_server(ready: threading.Event, holder: dict, stop: threading.Event) -> None:
+def start_length_prefixed_server(
+    ready: threading.Event, holder: dict, stop: threading.Event
+) -> None:
     """带长度前缀协议的回显服务端: 用 decoder 取出完整消息, 再按同样格式回写。"""
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -161,14 +167,18 @@ def _lp_serve(conn: socket.socket) -> None:
             chunk = conn.recv(65536)
             if not chunk:
                 break
-            for message in decoder.feed(chunk):        # 一次 recv 可能产出 0 条或多条消息
+            for message in decoder.feed(
+                chunk
+            ):  # 一次 recv 可能产出 0 条或多条消息
                 conn.sendall(encode_length_prefixed(b"ACK:" + message))
 
 
 def main() -> None:
     ready, stop = threading.Event(), threading.Event()
     holder: dict = {}
-    threading.Thread(target=start_echo_server, args=(ready, holder, stop), daemon=True).start()
+    threading.Thread(
+        target=start_echo_server, args=(ready, holder, stop), daemon=True
+    ).start()
     ready.wait(timeout=5)
     addr = holder["addr"]
 
@@ -181,7 +191,7 @@ def main() -> None:
         client.sendall(f"消息{i}".encode("utf-8"))
         print(f"    sendall('消息{i}')  = {len(f'消息{i}'.encode())} 字节")
 
-    time.sleep(0.3)                       # 给内核一点时间把 3 条合并成一个报文段发出去
+    time.sleep(0.3)  # 给内核一点时间把 3 条合并成一个报文段发出去
     got = client.recv(65536)
     print(f"\n  服务端一次 recv 拿到的字节数: {len(got)}")
     print(f"  内容: {got!r}")
@@ -232,12 +242,14 @@ def main() -> None:
         if not data:
             break
         buf += data
-        while len(buf) >= 8:                       # 关键: 循环切割, 而不是假设一次一条
+        while len(buf) >= 8:  # 关键: 循环切割, 而不是假设一次一条
             decoded.append(buf[:8].rstrip(b" "))
             buf = buf[8:]
     fixed.close()
     print(f"  回显服务端把原始字节原样发回, 我们用定长规则解出: {decoded}")
-    print(f"  残留的不足一条的字节: {buf!r}（这种情况必须留在缓冲区里等下一次 recv）")
+    print(
+        f"  残留的不足一条的字节: {buf!r}（这种情况必须留在缓冲区里等下一次 recv）"
+    )
 
     # ---------------------------------------------------------------- 第 3 步
     title("第 3 步：方案 B 分隔符（\n）")
@@ -301,14 +313,18 @@ def main() -> None:
 
     # 喂法 1: 一次全给（对应所有数据都在缓冲区里 = 粘包）
     got1 = decoder.feed(wire)
-    print(f"    喂法 1（一次性喂完）: 解出 {len(got1)} 条 -> {[len(x) for x in got1]}")
+    print(
+        f"    喂法 1（一次性喂完）: 解出 {len(got1)} 条 -> {[len(x) for x in got1]}"
+    )
 
     # 喂法 2: 逐字节喂（最极端的拆包, 每个字节一次 feed）
     decoder2 = LengthPrefixedDecoder()
     got2: list[bytes] = []
     for i in range(len(wire)):
-        got2 += decoder2.feed(wire[i:i + 1])
-    print(f"    喂法 2（逐字节 1 个 1 个喂）: 解出 {len(got2)} 条 -> {[len(x) for x in got2]}")
+        got2 += decoder2.feed(wire[i : i + 1])
+    print(
+        f"    喂法 2（逐字节 1 个 1 个喂）: 解出 {len(got2)} 条 -> {[len(x) for x in got2]}"
+    )
 
     # 喂法 3: 随机切分（模拟真实网络, 边界完全随机）
     random.seed(42)
@@ -317,9 +333,11 @@ def main() -> None:
     pos = 0
     while pos < len(wire):
         n = random.randint(1, 64)
-        got3 += decoder3.feed(wire[pos:pos + n])
+        got3 += decoder3.feed(wire[pos : pos + n])
         pos += n
-    print(f"    喂法 3（随机 1~64 字节切片）: 解出 {len(got3)} 条 -> {[len(x) for x in got3]}")
+    print(
+        f"    喂法 3（随机 1~64 字节切片）: 解出 {len(got3)} 条 -> {[len(x) for x in got3]}"
+    )
 
     same = got1 == got2 == got3 == msgs
     print(f"\n    三种喂法结果完全一致且与原始消息相同? {same}")
@@ -333,8 +351,11 @@ def main() -> None:
     title("第 5 步：在网络上来一遍（带长度前缀的回显服务端）")
 
     lp_ready, lp_holder = threading.Event(), {}
-    threading.Thread(target=start_length_prefixed_server,
-                     args=(lp_ready, lp_holder, stop), daemon=True).start()
+    threading.Thread(
+        target=start_length_prefixed_server,
+        args=(lp_ready, lp_holder, stop),
+        daemon=True,
+    ).start()
     lp_ready.wait(timeout=5)
     lp_addr = lp_holder["lp_addr"]
     print(f"  带长度前缀协议的服务端: {lp_addr}")
@@ -342,12 +363,14 @@ def main() -> None:
     lp_client = socket.create_connection(lp_addr)
     # 故意把 4 条消息拼成一段乱切发送, 模拟真实网络
     stream = b"".join(encode_length_prefixed(m) for m in msgs)
-    print(f"  客户端把 {len(msgs)} 条消息拼成 {len(stream)} 字节, 随机切片发送:")
+    print(
+        f"  客户端把 {len(msgs)} 条消息拼成 {len(stream)} 字节, 随机切片发送:"
+    )
     pos = 0
     slices = []
     while pos < len(stream):
         n = random.randint(1, 40)
-        lp_client.sendall(stream[pos:pos + n])
+        lp_client.sendall(stream[pos : pos + n])
         slices.append(n)
         pos += n
     print(f"    实际切成 {len(slices)} 次发送, 前 10 次大小 {slices[:10]}")
@@ -361,11 +384,13 @@ def main() -> None:
             break
         replies += lp_decoder.feed(chunk)
     lp_client.close()
-    print(f"\n  服务端按协议解出消息并逐条 ACK, 客户端解出 {len(replies)} 条回复:")
+    print(
+        f"\n  服务端按协议解出消息并逐条 ACK, 客户端解出 {len(replies)} 条回复:"
+    )
     for r in replies:
         shown = r if len(r) < 40 else r[:40] + b"..."
         print(f"    {shown!r}")
-    print(f"""
+    print("""
   请对比一下这里和 TCP echo 的区别:
       TCP echo 服务端: 收到什么字节就原样发回（完全不管边界）
       本服务端:        先用 decoder 切出「一条完整消息」, 再按协议逐条回复

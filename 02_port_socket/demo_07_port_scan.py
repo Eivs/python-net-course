@@ -43,9 +43,9 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-TARGET = "127.0.0.1"          # 只扫本机！改这里之前请确认你有授权。
-CONNECT_TIMEOUT = 0.4          # 每个端口的等待上限（秒）
-MAX_WORKERS = 128              # 并发度
+TARGET = "127.0.0.1"  # 只扫本机！改这里之前请确认你有授权。
+CONNECT_TIMEOUT = 0.4  # 每个端口的等待上限（秒）
+MAX_WORKERS = 128  # 并发度
 
 
 def title(text: str) -> None:
@@ -55,7 +55,9 @@ def title(text: str) -> None:
     print("=" * 74)
 
 
-def probe_port(host: str, port: int, timeout: float = CONNECT_TIMEOUT) -> tuple[int, str]:
+def probe_port(
+    host: str, port: int, timeout: float = CONNECT_TIMEOUT
+) -> tuple[int, str]:
     """对单个端口做一次探测, 返回 (端口, 结果)。
 
     结果有三种:
@@ -66,7 +68,7 @@ def probe_port(host: str, port: int, timeout: float = CONNECT_TIMEOUT) -> tuple[
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
-        code = sock.connect_ex((host, port))       # 不抛异常, 返回 errno
+        code = sock.connect_ex((host, port))  # 不抛异常, 返回 errno
         if code == 0:
             return port, "open"
         if code == errno.ECONNREFUSED:
@@ -92,7 +94,11 @@ def grab_banner(host: str, port: int, timeout: float = 1.0) -> str:
         if port in (80, 8000, 8080, 8888, 3000):
             sock.sendall(b"HEAD / HTTP/1.0\r\n\r\n")
         data = sock.recv(128)
-        return data.decode("utf-8", "replace").splitlines()[0][:80] if data else "(无 banner, 静默服务)"
+        return (
+            data.decode("utf-8", "replace").splitlines()[0][:80]
+            if data
+            else "(无 banner, 静默服务)"
+        )
     except OSError as exc:
         return f"(读取失败: {type(exc).__name__})"
     finally:
@@ -147,15 +153,21 @@ def main() -> None:
     start = time.perf_counter()
     results: dict[int, str] = {}
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        for port, result in pool.map(lambda p: probe_port(TARGET, p), range(1, 1025)):
+        for port, result in pool.map(
+            lambda p: probe_port(TARGET, p), range(1, 1025)
+        ):
             results[port] = result
     elapsed = time.perf_counter() - start
 
     opened = sorted(p for p, r in results.items() if r == "open")
     other = {r for r in results.values() if r not in ("open", "closed")}
 
-    print(f"  扫完 1024 个端口, 耗时 {elapsed:.2f} 秒（并发度 {MAX_WORKERS}, 单端口超时 {CONNECT_TIMEOUT}s）")
-    print(f"  结果统计: open={len(opened)}  closed={sum(1 for r in results.values() if r == 'closed')}  其他={other or '无'}")
+    print(
+        f"  扫完 1024 个端口, 耗时 {elapsed:.2f} 秒（并发度 {MAX_WORKERS}, 单端口超时 {CONNECT_TIMEOUT}s）"
+    )
+    print(
+        f"  结果统计: open={len(opened)}  closed={sum(1 for r in results.values() if r == 'closed')}  其他={other or '无'}"
+    )
     print(f"  开放端口: {opened}")
 
     print(f"""
@@ -173,16 +185,37 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 3 步
     title("第 3 步：换成「常见端口清单」再扫一次（真实扫描器的做法）")
 
-    common_ports = [22, 53, 80, 123, 443, 1100, 3000, 3306, 5000, 5432,
-                    6379, 7000, 8000, 8080, 8888, 9000, 27017]
-    targets = sorted(set(common_ports) | {open_port})      # 把自己起的测试服务也放进去
+    common_ports = [
+        22,
+        53,
+        80,
+        123,
+        443,
+        1100,
+        3000,
+        3306,
+        5000,
+        5432,
+        6379,
+        7000,
+        8000,
+        8080,
+        8888,
+        9000,
+        27017,
+    ]
+    targets = sorted(
+        set(common_ports) | {open_port}
+    )  # 把自己起的测试服务也放进去
     found: list[int] = []
     start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=32) as pool:
         for port, result in pool.map(lambda p: probe_port(TARGET, p), targets):
             if result == "open":
                 found.append(port)
-    print(f"  扫了 {len(targets)} 个常见端口, 耗时 {time.perf_counter() - start:.2f} 秒")
+    print(
+        f"  扫了 {len(targets)} 个常见端口, 耗时 {time.perf_counter() - start:.2f} 秒"
+    )
     print(f"  开放的端口（含我们刚起的 {open_port}）: {found}")
     print("""
   这个列表就是各种扫描器默认字典的雏形: 22(SSH) 80/443(Web) 3306(MySQL)

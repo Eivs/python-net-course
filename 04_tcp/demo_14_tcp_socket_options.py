@@ -59,7 +59,9 @@ class SinkServer:
             try:
                 conn, _ = self.sock.accept()
                 conns.append(conn)
-                threading.Thread(target=self._drain, args=(conn,), daemon=True).start()
+                threading.Thread(
+                    target=self._drain, args=(conn,), daemon=True
+                ).start()
             except (socket.timeout, OSError):
                 continue
         for c in conns:
@@ -154,10 +156,10 @@ def main() -> None:
         server.reset()
         start = time.perf_counter()
         for _ in range(2000):
-            s.sendall(b"x")                     # 每次只写 1 字节, 逼出 Nagle 行为
+            s.sendall(b"x")  # 每次只写 1 字节, 逼出 Nagle 行为
         s.shutdown(socket.SHUT_WR)
-        s.settimeout(20)                     # 安全网: 万一对面不关, 也不至于卡死
-        while s.recv(1024):                  # 等到 EOF（服务端读到 EOF 后会关连接）
+        s.settimeout(20)  # 安全网: 万一对面不关, 也不至于卡死
+        while s.recv(1024):  # 等到 EOF（服务端读到 EOF 后会关连接）
             pass
         elapsed = time.perf_counter() - start
         s.close()
@@ -167,7 +169,9 @@ def main() -> None:
     on = tiny_writes(nodelay=True)
     print(f"    TCP_NODELAY=0（Nagle 生效）: {off * 1000:8.2f} ms")
     print(f"    TCP_NODELAY=1（不等, 直接发）: {on * 1000:8.2f} ms")
-    print(f"    差异: 本地回环上 {abs(off - on) * 1000:.2f} ms（{'NODELAY 更快' if on < off else 'Nagle 更快'}）")
+    print(
+        f"    差异: 本地回环上 {abs(off - on) * 1000:.2f} ms（{'NODELAY 更快' if on < off else 'Nagle 更快'}）"
+    )
     print("""
   诚实结论: 在本机回环上差别很小甚至反转, 因为回环的 ACK 是立刻返回的, Nagle 几乎不等待。
   真实网络上才有明显差别:
@@ -187,7 +191,9 @@ def main() -> None:
     snd_default = probe.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
     rcv_default = probe.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
     probe.close()
-    print(f"  本机默认 SO_SNDBUF = {snd_default} 字节, SO_RCVBUF = {rcv_default} 字节")
+    print(
+        f"  本机默认 SO_SNDBUF = {snd_default} 字节, SO_RCVBUF = {rcv_default} 字节"
+    )
     print("""  （注意: 你设 8192, 内核可能给你两倍, 因为它内部算了额外开销;
     所以永远要用 getsockopt 读回实际值, 别假设 = 你设的值。）
 
@@ -199,7 +205,9 @@ def main() -> None:
     * 经验公式（BDP）: 缓冲区 >= 带宽 × RTT。100Mbps × 100ms = 1.25MB, 默认值就不够用了。
 """)
 
-    def transfer_with_buffers(total_bytes: int, bufsize: int | None) -> tuple[float, int]:
+    def transfer_with_buffers(
+        total_bytes: int, bufsize: int | None
+    ) -> tuple[float, int]:
         s = socket.create_connection(server.address)
         if bufsize is not None:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, bufsize)
@@ -213,7 +221,7 @@ def main() -> None:
             sent += len(block)
         s.shutdown(socket.SHUT_WR)
         s.settimeout(60)
-        while s.recv(262144):                # 读到 EOF 说明服务端已经收完并关闭
+        while s.recv(262144):  # 读到 EOF 说明服务端已经收完并关闭
             pass
         elapsed = time.perf_counter() - start
         s.close()
@@ -223,8 +231,12 @@ def main() -> None:
     t_default, got_default = transfer_with_buffers(total, None)
     t_small, got_small = transfer_with_buffers(total, 8192)
     print(f"  传输 {total // (1024 * 1024)} MiB 实测:")
-    print(f"    默认缓冲区   : {t_default * 1000:8.1f} ms  ->  {got_default / t_default / 1e6:.0f} MB/s")
-    print(f"    SNDBUF=8192 : {t_small * 1000:8.1f} ms  ->  {got_small / t_small / 1e6:.0f} MB/s")
+    print(
+        f"    默认缓冲区   : {t_default * 1000:8.1f} ms  ->  {got_default / t_default / 1e6:.0f} MB/s"
+    )
+    print(
+        f"    SNDBUF=8192 : {t_small * 1000:8.1f} ms  ->  {got_small / t_small / 1e6:.0f} MB/s"
+    )
     print(f"    （收到字节数 {got_default} / {got_small}，两者应相同）")
     print("""
   在本地回环上差别可能不大（没有真实带宽瓶颈）, 但在真实链路上:
@@ -244,9 +256,11 @@ def main() -> None:
 """)
     timeout_sock = socket.create_connection(server.address)
     # timeval 结构: (tv_sec, tv_usec), macOS/Linux 64 位下都是两个 long
-    tv = struct.pack("ll", 0, 300000)          # 300 ms
+    tv = struct.pack("ll", 0, 300000)  # 300 ms
     timeout_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, tv)
-    readback = timeout_sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, 16)
+    readback = timeout_sock.getsockopt(
+        socket.SOL_SOCKET, socket.SO_RCVTIMEO, 16
+    )
     sec, usec = struct.unpack("ll", readback)
     print(f"  设置 SO_RCVTIMEO = 300ms, 读回 = {sec}s {usec}us")
     print("  然后啥也不发就直接 recv, 看会抛什么异常:")
@@ -256,7 +270,9 @@ def main() -> None:
     except socket.timeout as exc:
         print(f"    -> socket.timeout（按 settimeout 的语义）: {exc}")
     except BlockingIOError as exc:
-        print(f"    -> BlockingIOError: {exc}   (errno={exc.errno} = {errno.errorcode.get(exc.errno)})")
+        print(
+            f"    -> BlockingIOError: {exc}   (errno={exc.errno} = {errno.errorcode.get(exc.errno)})"
+        )
         print("""       <- 关键差异! 内核超时返回的是 EAGAIN/EWOULDBLOCK, 而 Python 只在
           「通过 settimeout 设置的超时」时才把它翻译成 socket.timeout。
           用 SO_RCVTIMEO 时你拿到的是 BlockingIOError（它是 OSError 的子类）。
@@ -265,19 +281,25 @@ def main() -> None:
     except OSError as exc:
         print(f"    -> {type(exc).__name__}: {exc}")
     finally:
-        print(f"    实际等待: {(time.perf_counter() - start) * 1000:.1f} ms（应接近 300ms）")
+        print(
+            f"    实际等待: {(time.perf_counter() - start) * 1000:.1f} ms（应接近 300ms）"
+        )
         timeout_sock.close()
 
     # ---------------------------------------------------------------- 第 5 步
     title("第 5 步：SO_KEEPALIVE —— TCP 层心跳，为什么通常不够用")
 
     ka = socket.create_connection(server.address)
-    print(f"  SO_KEEPALIVE 默认值: {ka.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)}（0 = 关闭）")
+    print(
+        f"  SO_KEEPALIVE 默认值: {ka.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)}（0 = 关闭）"
+    )
     ka.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
     param_names = ["TCP_KEEPALIVE", "TCP_KEEPINTVL", "TCP_KEEPCNT"]
     params: dict[str, int] = {}
-    print("  各平台的相关参数（名称和单位都不一样, 这是可移植性噩梦的经典案例）:")
+    print(
+        "  各平台的相关参数（名称和单位都不一样, 这是可移植性噩梦的经典案例）:"
+    )
     for name in param_names:
         opt = getattr(socket, name, None)
         if opt is None:
@@ -289,10 +311,16 @@ def main() -> None:
         print(f"    {name:<16} 默认 {value} {unit}")
 
     if params:
-        idle = params.get("TCP_KEEPALIVE", 0) / 1000 if params.get("TCP_KEEPALIVE", 0) > 10000 else params.get("TCP_KEEPALIVE", 0)
+        idle = (
+            params.get("TCP_KEEPALIVE", 0) / 1000
+            if params.get("TCP_KEEPALIVE", 0) > 10000
+            else params.get("TCP_KEEPALIVE", 0)
+        )
         intvl = params.get("TCP_KEEPINTVL", 0)
         cnt = params.get("TCP_KEEPCNT", 0)
-        print(f"\n  按默认值算, 探测到「对端彻底死了」需要: 空闲 {idle}秒 + {intvl}秒 × {cnt}次 ≈ {idle + intvl * cnt:.0f} 秒")
+        print(
+            f"\n  按默认值算, 探测到「对端彻底死了」需要: 空闲 {idle}秒 + {intvl}秒 × {cnt}次 ≈ {idle + intvl * cnt:.0f} 秒"
+        )
         print("""      <- 两个多小时。这个默认值来自 1980 年代, 对现代业务来说完全不可用:
          你的负载均衡器、连接池、数据库连接早就超时断开或被中间设备悄悄清理了,
          而你这一端还以为连接是好的, 于是出现「偶发 BrokenPipeError」。
@@ -315,12 +343,18 @@ def main() -> None:
 """)
     nb = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     nb.setblocking(False)
-    code = nb.connect_ex(("127.0.0.1", 1))      # 1 号端口肯定没人监听
-    print(f"  connect_ex(127.0.0.1:1) 立刻返回 {code} ({errno.errorcode.get(code)})")
+    code = nb.connect_ex(("127.0.0.1", 1))  # 1 号端口肯定没人监听
+    print(
+        f"  connect_ex(127.0.0.1:1) 立刻返回 {code} ({errno.errorcode.get(code)})"
+    )
     time.sleep(0.2)
     so_error = nb.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-    print(f"  稍后读 SO_ERROR = {so_error} ({errno.errorcode.get(so_error, '成功')})")
-    print(f"  再读一次 SO_ERROR = {nb.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)}  <- 读完即清除, 第二次是 0")
+    print(
+        f"  稍后读 SO_ERROR = {so_error} ({errno.errorcode.get(so_error, '成功')})"
+    )
+    print(
+        f"  再读一次 SO_ERROR = {nb.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)}  <- 读完即清除, 第二次是 0"
+    )
     nb.close()
     print("""
   这个模式是 asyncio / selectors / 所有高性能网络框架的基础:

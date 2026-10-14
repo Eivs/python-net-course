@@ -48,7 +48,13 @@ def title(text: str) -> None:
 def run(cmd: list[str], timeout: float = 5.0) -> str:
     """跑一个外部命令并返回 stdout，失败就返回空串（示例代码要能容错）。"""
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout).stdout
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=timeout,
+        ).stdout
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -70,7 +76,15 @@ def parse_ifconfig() -> list[dict]:
         if line and not line[0].isspace() and ":" in line:
             # 新网卡开始
             name, _, rest = line.partition(":")
-            current = {"name": name.strip(), "flags_raw": rest.strip(), "inet": [], "inet6": [], "ether": None, "mtu": None, "status": None}
+            current = {
+                "name": name.strip(),
+                "flags_raw": rest.strip(),
+                "inet": [],
+                "inet6": [],
+                "ether": None,
+                "mtu": None,
+                "status": None,
+            }
             m = re.search(r"mtu\s+(\d+)", rest)
             if m:
                 current["mtu"] = int(m.group(1))
@@ -84,13 +98,23 @@ def parse_ifconfig() -> list[dict]:
         if m:
             current["ether"] = m.group(1)
             continue
-        m = re.match(r"inet\s+(\S+)\s+netmask\s+(\S+)(?:\s+broadcast\s+(\S+))?", stripped)
+        m = re.match(
+            r"inet\s+(\S+)\s+netmask\s+(\S+)(?:\s+broadcast\s+(\S+))?", stripped
+        )
         if m:
-            current["inet"].append({"ip": m.group(1), "netmask": m.group(2), "broadcast": m.group(3)})
+            current["inet"].append(
+                {
+                    "ip": m.group(1),
+                    "netmask": m.group(2),
+                    "broadcast": m.group(3),
+                }
+            )
             continue
         m = re.match(r"inet6\s+(\S+)\s+prefixlen\s+(\d+)", stripped)
         if m:
-            current["inet6"].append({"ip": m.group(1), "prefixlen": int(m.group(2))})
+            current["inet6"].append(
+                {"ip": m.group(1), "prefixlen": int(m.group(2))}
+            )
             continue
         m = re.match(r"status:\s+(\S+)", stripped)
         if m:
@@ -120,7 +144,9 @@ def main() -> None:
         flags = re.search(r"<([^>]*)>", iface["flags_raw"])
         flag_set = flags.group(1) if flags else ""
         print()
-        print(f"  [{iface['name']}]  up={up}  mtu={iface['mtu']}  status={iface['status'] or '-'}")
+        print(
+            f"  [{iface['name']}]  up={up}  mtu={iface['mtu']}  status={iface['status'] or '-'}"
+        )
         if flag_set:
             print(f"    标志位: {flag_set}")
         print(f"    MAC  : {iface['ether'] or '(无, 可能是虚拟/回环网卡)'}")
@@ -131,11 +157,19 @@ def main() -> None:
                 mask_str = f"{mask_int}(/{bits})"
             else:
                 mask_str = mask_int
-            print(f"    IPv4 : {v4['ip']:<16} 掩码={mask_str:<20} 广播={v4['broadcast'] or '-'}")
+            print(
+                f"    IPv4 : {v4['ip']:<16} 掩码={mask_str:<20} 广播={v4['broadcast'] or '-'}"
+            )
         for v6 in iface["inet6"]:
             scope = v6["ip"].split("%")[-1] if "%" in v6["ip"] else "-"
-            kind = "链路本地" if v6["ip"].startswith("fe80") else ("回环" if v6["ip"].startswith("::1") else "全球/唯一本地")
-            print(f"    IPv6 : {v6['ip']:<42} /{v6['prefixlen']:<3} ({kind}, scope={scope})")
+            kind = (
+                "链路本地"
+                if v6["ip"].startswith("fe80")
+                else ("回环" if v6["ip"].startswith("::1") else "全球/唯一本地")
+            )
+            print(
+                f"    IPv6 : {v6['ip']:<42} /{v6['prefixlen']:<3} ({kind}, scope={scope})"
+            )
 
     print("""
 读这张表的经验:
@@ -153,10 +187,14 @@ def main() -> None:
     eth = next((i for i in ifaces if i["mtu"] == 1500 and i["inet"]), None)
     mtu = eth["mtu"] if eth else 1500
     print(f"  取一张以太网网卡 (MTU={mtu}) 来算:")
-    print(f"    MTU                    = {mtu} 字节（一个以太网帧能装的 IP 包上限）")
-    print(f"    - IPv4 头(20, 无选项)  = 20")
-    print(f"    - TCP 头(20, 无选项)   = 20")
-    print(f"    = TCP MSS              = {mtu - 20 - 20} 字节（对端一次最多发这么多 TCP 载荷）")
+    print(
+        f"    MTU                    = {mtu} 字节（一个以太网帧能装的 IP 包上限）"
+    )
+    print("    - IPv4 头(20, 无选项)  = 20")
+    print("    - TCP 头(20, 无选项)   = 20")
+    print(
+        f"    = TCP MSS              = {mtu - 20 - 20} 字节（对端一次最多发这么多 TCP 载荷）"
+    )
 
     payload = 10 * 1024
     print(f"""
@@ -166,7 +204,9 @@ def main() -> None:
   第 6 课会专门演示怎么在字节流上面重新划分消息边界。
 """)
     if mtu != 1500:
-        print(f"  提示: 隧道网卡 MTU 更小（比如 utun 常见 1280 或 1400）, 走隧道时有效 MSS 也会变小。")
+        print(
+            "  提示: 隧道网卡 MTU 更小（比如 utun 常见 1280 或 1400）, 走隧道时有效 MSS 也会变小。"
+        )
 
     # ---------------------------------------------------------------- 第 4 步
     title("第 4 步：ARP 缓存，我最近和哪些局域网邻居说过话")
@@ -186,7 +226,9 @@ def main() -> None:
         for ln in hit:
             print(f"  网关在 ARP 缓存里: {ln.strip()}")
         if gateway and not hit:
-            print("  （本次未在 ARP 缓存里找到网关条目, 说明还没跟它说过话或者刚过期）")
+            print(
+                "  （本次未在 ARP 缓存里找到网关条目, 说明还没跟它说过话或者刚过期）"
+            )
         print(f"  当前 ARP 表前 6 条（共 {len(lines)} 条）:")
         for ln in lines[:6]:
             print(f"  {ln}")
@@ -213,7 +255,7 @@ def main() -> None:
 
     print(f"""
   绑定到指定网卡的写法（Linux 上是 SO_BINDTODEVICE, BSD/macOS 上用 IP_BOUND_IF）:
-      IP_BOUND_IF = {getattr(socket, 'IP_BOUND_IF', '本平台不支持')}
+      IP_BOUND_IF = {getattr(socket, "IP_BOUND_IF", "本平台不支持")}
   这个技巧在多网卡机器上非常有用: 强制某个连接只走 Wi-Fi 或只走有线。
 """)
 

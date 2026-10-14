@@ -65,7 +65,11 @@ class Request:
 
     def keep_alive(self) -> bool:
         conn = self.headers.get("connection", "").lower()
-        return conn == "keep-alive" if self.version == "HTTP/1.0" else conn != "close"
+        return (
+            conn == "keep-alive"
+            if self.version == "HTTP/1.0"
+            else conn != "close"
+        )
 
 
 class BadRequest(Exception):
@@ -83,17 +87,35 @@ class Response:
     body: bytes = b""
     content_length: int | None = None
 
-    REASONS = {200: "OK", 206: "Partial Content", 301: "Moved Permanently", 302: "Found",
-               304: "Not Modified", 400: "Bad Request", 403: "Forbidden", 404: "Not Found",
-               405: "Method Not Allowed", 416: "Range Not Satisfiable", 500: "Internal Server Error"}
+    REASONS = {
+        200: "OK",
+        206: "Partial Content",
+        301: "Moved Permanently",
+        302: "Found",
+        304: "Not Modified",
+        400: "Bad Request",
+        403: "Forbidden",
+        404: "Not Found",
+        405: "Method Not Allowed",
+        416: "Range Not Satisfiable",
+        500: "Internal Server Error",
+    }
 
     def serialize(self, keep_alive: bool) -> bytes:
-        lines = [f"HTTP/1.1 {self.status} {self.REASONS.get(self.status, 'Unknown')}"]
+        lines = [
+            f"HTTP/1.1 {self.status} {self.REASONS.get(self.status, 'Unknown')}"
+        ]
         headers = dict(self.headers)
         headers.setdefault("Content-Type", "text/plain; charset=utf-8")
         headers.setdefault("Server", "mini-http-server/1.0")
-        headers["Content-Length"] = str(self.content_length if self.content_length is not None else len(self.body))
-        headers["Date"] = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
+        headers["Content-Length"] = str(
+            self.content_length
+            if self.content_length is not None
+            else len(self.body)
+        )
+        headers["Date"] = time.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT", time.gmtime()
+        )
         headers["Connection"] = "keep-alive" if keep_alive else "close"
         for key, value in headers.items():
             lines.append(f"{key}: {value}")
@@ -134,13 +156,15 @@ def parse_request(buf: bytearray) -> tuple[Request | None, int]:
     total = head_end + 4 + length
     if len(buf) < total:
         raise Incomplete
-    body = bytes(buf[head_end + 4:total])
+    body = bytes(buf[head_end + 4 : total])
     return Request(method, target, version, headers, body), total
 
 
 def safe_join(root: str, path: str) -> str | None:
     """把 URL 路径映射到磁盘路径, 越界返回 None（路径穿越防护, 安全底线）。"""
-    target = os.path.realpath(os.path.join(root, path.lstrip("/") or "index.html"))
+    target = os.path.realpath(
+        os.path.join(root, path.lstrip("/") or "index.html")
+    )
     root = os.path.realpath(root)
     if target != root and not target.startswith(root + os.sep):
         return None
@@ -155,10 +179,12 @@ def parse_range(header: str, size: int) -> tuple[int, int] | None:
     """
     if not header.startswith("bytes="):
         return None
-    spec = header[len("bytes="):].split(",")[0].strip()      # 多段 Range 少见, 这里只取第一段
+    spec = (
+        header[len("bytes=") :].split(",")[0].strip()
+    )  # 多段 Range 少见, 这里只取第一段
     start_s, _, end_s = spec.partition("-")
     try:
-        if start_s == "":                                    # bytes=-500 -> 最后 500 字节
+        if start_s == "":  # bytes=-500 -> 最后 500 字节
             n = int(end_s)
             if n <= 0:
                 return None
@@ -185,14 +211,23 @@ def http_date(ts: float) -> str:
 def route(request: Request, root: str) -> Response:
     """把请求变成响应。只支持 GET/HEAD/POST(echo) 与静态文件。"""
     if request.method == "POST" and request.path == "/echo":
-        return Response(200, headers={"Content-Type": "application/octet-stream"}, body=b"echo:" + request.body)
+        return Response(
+            200,
+            headers={"Content-Type": "application/octet-stream"},
+            body=b"echo:" + request.body,
+        )
     if request.method == "GET" and request.path == "/healthz":
         return Response(200, body=b"ok\n")
 
     if request.method not in ("GET", "HEAD"):
-        allowed = ["GET", "HEAD"] + (["POST"] if request.path == "/echo" else [])
-        return Response(405, headers={"Allow": ", ".join(allowed)},
-                        body=f"405, allowed: {', '.join(allowed)}\n".encode())
+        allowed = ["GET", "HEAD"] + (
+            ["POST"] if request.path == "/echo" else []
+        )
+        return Response(
+            405,
+            headers={"Allow": ", ".join(allowed)},
+            body=f"405, allowed: {', '.join(allowed)}\n".encode(),
+        )
 
     return serve_static(request, root)
 
@@ -203,7 +238,9 @@ def serve_static(request: Request, root: str) -> Response:
         return Response(403, body=b"403 Forbidden\n")
     if os.path.isdir(target):
         if not request.path.endswith("/"):
-            return Response(301, headers={"Location": request.path + "/"}, body=b"")
+            return Response(
+                301, headers={"Location": request.path + "/"}, body=b""
+            )
         target = os.path.join(target, "index.html")
     if not os.path.isfile(target):
         return Response(404, body=f"404 Not Found: {request.path}\n".encode())
@@ -215,36 +252,56 @@ def serve_static(request: Request, root: str) -> Response:
     # ---- 缓存协商（第 15 课的头字段在这里发挥作用）----
     # 客户端带上 If-None-Match / If-Modified-Since, 表示"我本地有缓存, 没变就别重发"
     if request.headers.get("if-none-match") == etag:
-        return Response(304, headers={"ETag": etag, "Last-Modified": last_modified}, body=b"")
+        return Response(
+            304,
+            headers={"ETag": etag, "Last-Modified": last_modified},
+            body=b"",
+        )
     ims = request.headers.get("if-modified-since")
     if ims and ims == last_modified:
-        return Response(304, headers={"ETag": etag, "Last-Modified": last_modified}, body=b"")
+        return Response(
+            304,
+            headers={"ETag": etag, "Last-Modified": last_modified},
+            body=b"",
+        )
 
     content_type = mimetypes.guess_type(target)[0] or "application/octet-stream"
     if content_type.startswith("text/"):
         content_type += "; charset=utf-8"
-    headers = {"Content-Type": content_type, "ETag": etag, "Last-Modified": last_modified,
-               "Accept-Ranges": "bytes"}
+    headers = {
+        "Content-Type": content_type,
+        "ETag": etag,
+        "Last-Modified": last_modified,
+        "Accept-Ranges": "bytes",
+    }
 
     # ---- Range 请求（断点续传 / 视频拖动）----
     range_header = request.headers.get("range")
     if range_header:
         span = parse_range(range_header, info.st_size)
         if span is None:
-            return Response(416, headers={**headers, "Content-Range": f"bytes */{info.st_size}"}, body=b"")
+            return Response(
+                416,
+                headers={**headers, "Content-Range": f"bytes */{info.st_size}"},
+                body=b"",
+            )
         start, end = span
         with open(target, "rb") as fh:
             fh.seek(start)
             body = fh.read(end - start + 1)
         headers["Content-Range"] = f"bytes {start}-{end}/{info.st_size}"
         if request.method == "HEAD":
-            return Response(206, headers=headers, body=b"", content_length=len(body))
+            return Response(
+                206, headers=headers, body=b"", content_length=len(body)
+            )
         return Response(206, headers=headers, body=body)
 
     with open(target, "rb") as fh:
         body = fh.read()
     if request.method == "HEAD":
-        return Response(200, headers=headers, body=b"", content_length=len(body))
+        return Response(
+            200, headers=headers, body=b"", content_length=len(body)
+        )
     return Response(200, headers=headers, body=body)
 
 
@@ -269,9 +326,17 @@ class Metrics:
             if not self.latencies:
                 return {"count": 0}
             ordered = sorted(self.latencies)
-            pick = lambda q: ordered[min(int(len(ordered) * q), len(ordered) - 1)] * 1000
-            return {"count": self.count, "bytes": self.bytes_out, "p50_ms": pick(0.5),
-                    "p99_ms": pick(0.99), "statuses": dict(self.statuses)}
+            pick = (
+                lambda q: ordered[min(int(len(ordered) * q), len(ordered) - 1)]
+                * 1000
+            )
+            return {
+                "count": self.count,
+                "bytes": self.bytes_out,
+                "p50_ms": pick(0.5),
+                "p99_ms": pick(0.99),
+                "statuses": dict(self.statuses),
+            }
 
 
 # ================================================================ 模型 A: 每连接一线程
@@ -280,7 +345,13 @@ class ThreadedServer:
 
     name = "ThreadedServer"
 
-    def __init__(self, root: str, host: str = "127.0.0.1", port: int = 0, tls: tuple | None = None):
+    def __init__(
+        self,
+        root: str,
+        host: str = "127.0.0.1",
+        port: int = 0,
+        tls: tuple | None = None,
+    ):
         self.root = root
         self.metrics = Metrics()
         self.tls = tls
@@ -302,7 +373,9 @@ class ThreadedServer:
                 conn, _ = self.sock.accept()
             except (socket.timeout, OSError):
                 continue
-            threading.Thread(target=self._handle, args=(conn,), daemon=True).start()
+            threading.Thread(
+                target=self._handle, args=(conn,), daemon=True
+            ).start()
         self.sock.close()
 
     def _handle(self, conn: socket.socket) -> None:
@@ -327,7 +400,11 @@ class ThreadedServer:
                     buf += chunk
                     continue
                 except BadRequest as exc:
-                    conn.sendall(Response(400, body=f"400: {exc}\n".encode()).serialize(False))
+                    conn.sendall(
+                        Response(400, body=f"400: {exc}\n".encode()).serialize(
+                            False
+                        )
+                    )
                     return
 
                 del buf[:consumed]
@@ -338,7 +415,9 @@ class ThreadedServer:
                     conn.sendall(payload)
                 except OSError:
                     return
-                self.metrics.record(response.status, len(payload), time.perf_counter() - started)
+                self.metrics.record(
+                    response.status, len(payload), time.perf_counter() - started
+                )
                 if not request.keep_alive():
                     return
 
@@ -400,10 +479,14 @@ class SelectorServer:
         except OSError:
             return
         conn.setblocking(False)
-        self.selector.register(conn, selectors.EVENT_READ, data=SelectorServer._Conn(conn))
+        self.selector.register(
+            conn, selectors.EVENT_READ, data=SelectorServer._Conn(conn)
+        )
         self.conns += 1
 
-    def _service(self, sock: socket.socket, state: "SelectorServer._Conn", mask: int) -> None:
+    def _service(
+        self, sock: socket.socket, state: "SelectorServer._Conn", mask: int
+    ) -> None:
         if mask & selectors.EVENT_READ:
             try:
                 chunk = sock.recv(READ_CHUNK)
@@ -412,7 +495,7 @@ class SelectorServer:
             except OSError:
                 self._drop(sock)
                 return
-            if chunk == b"":                     # 对端关闭(EOF): 无论缓冲区里有什么都收工
+            if chunk == b"":  # 对端关闭(EOF): 无论缓冲区里有什么都收工
                 self._drop(sock)
                 return
             if chunk:
@@ -429,7 +512,9 @@ class SelectorServer:
             except Incomplete:
                 break
             except BadRequest as exc:
-                state.outbuf += Response(400, body=f"400: {exc}\n".encode()).serialize(False)
+                state.outbuf += Response(
+                    400, body=f"400: {exc}\n".encode()
+                ).serialize(False)
                 state.close_when_drained = True
                 break
             del state.inbuf[:consumed]
@@ -437,7 +522,9 @@ class SelectorServer:
             response = route(request, self.root)
             payload = response.serialize(request.keep_alive())
             state.outbuf += payload
-            self.metrics.record(response.status, len(payload), time.perf_counter() - started)
+            self.metrics.record(
+                response.status, len(payload), time.perf_counter() - started
+            )
             if not request.keep_alive():
                 state.close_when_drained = True
                 break
@@ -460,7 +547,9 @@ class SelectorServer:
             return
         del state.outbuf[:sent]
         if state.outbuf:
-            self.selector.modify(state.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, state)
+            self.selector.modify(
+                state.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, state
+            )
         elif state.close_when_drained:
             self._drop(state.sock)
         else:
@@ -495,24 +584,36 @@ class RawHttpClient:
       2. 复用同一条 TCP 连接发多个请求（keep-alive）
     """
 
-    def __init__(self, host: str, port: int, timeout: float = 10.0, tls: bool = False):
+    def __init__(
+        self, host: str, port: int, timeout: float = 10.0, tls: bool = False
+    ):
         self.host, self.port = host, port
         self.buf = bytearray()
         self.sock = socket.create_connection((host, port), timeout=timeout)
         if tls:
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE      # 仅用于本机自签证书实验
+            ctx.verify_mode = ssl.CERT_NONE  # 仅用于本机自签证书实验
             self.sock = ctx.wrap_socket(self.sock, server_hostname="localhost")
         self.sock.settimeout(timeout)
 
-    def request(self, path: str, extra_headers: dict | None = None,
-                method: str = "GET", keep_alive: bool = True) -> tuple[int, dict, bytes]:
-        headers = {"Host": f"{self.host}:{self.port}",
-                   "Connection": "keep-alive" if keep_alive else "close"}
+    def request(
+        self,
+        path: str,
+        extra_headers: dict | None = None,
+        method: str = "GET",
+        keep_alive: bool = True,
+    ) -> tuple[int, dict, bytes]:
+        headers = {
+            "Host": f"{self.host}:{self.port}",
+            "Connection": "keep-alive" if keep_alive else "close",
+        }
         headers.update(extra_headers or {})
-        raw = (f"{method} {path} HTTP/1.1\r\n"
-               + "".join(f"{k}: {v}\r\n" for k, v in headers.items()) + "\r\n")
+        raw = (
+            f"{method} {path} HTTP/1.1\r\n"
+            + "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+            + "\r\n"
+        )
         self.sock.sendall(raw.encode("latin-1"))
         return self._read_response(method)
 
@@ -547,8 +648,8 @@ class RawHttpClient:
             if not chunk:
                 raise OSError("响应体没收全就断了")
             self.buf += chunk
-        body = bytes(self.buf[head_end + 4:need])
-        del self.buf[:need]                      # 关键: 只消费这一条响应
+        body = bytes(self.buf[head_end + 4 : need])
+        del self.buf[:need]  # 关键: 只消费这一条响应
         return status, headers, body
 
     def close(self) -> None:
@@ -558,19 +659,30 @@ class RawHttpClient:
             pass
 
 
-def client_get(host: str, port: int, path: str, headers: dict | None = None,
-               tls: bool = False, timeout: float = 5.0,
-               method: str = "GET") -> tuple[int, dict, bytes]:
+def client_get(
+    host: str,
+    port: int,
+    path: str,
+    headers: dict | None = None,
+    tls: bool = False,
+    timeout: float = 5.0,
+    method: str = "GET",
+) -> tuple[int, dict, bytes]:
     """一次性请求（每次都新建连接）, 用于自测。"""
     client = RawHttpClient(host, port, timeout=timeout, tls=tls)
     try:
-        return client.request(path, extra_headers=headers, method=method, keep_alive=False)
+        return client.request(
+            path, extra_headers=headers, method=method, keep_alive=False
+        )
     finally:
         client.close()
 
 
 def expect(label: str, ok: bool, detail: str = "") -> bool:
-    print(f"    [{'PASS' if ok else 'FAIL'}] {label}" + (f"   {detail}" if detail else ""))
+    print(
+        f"    [{'PASS' if ok else 'FAIL'}] {label}"
+        + (f"   {detail}" if detail else "")
+    )
     return bool(ok)
 
 
@@ -584,56 +696,103 @@ def self_test(server, tls: bool = False) -> bool:
     ok = True
 
     status, headers, body = client_get(host, port, "/index.html", tls=tls)
-    ok &= expect("GET /index.html -> 200", status == 200 and b"mini http server" in body,
-                 f"status={status} len={len(body)}")
+    ok &= expect(
+        "GET /index.html -> 200",
+        status == 200 and b"mini http server" in body,
+        f"status={status} len={len(body)}",
+    )
     etag = headers.get("etag")
-    ok &= expect("响应带 ETag / Last-Modified / Accept-Ranges",
-                 bool(etag and headers.get("last-modified") and headers.get("accept-ranges") == "bytes"),
-                 f"etag={etag}")
+    ok &= expect(
+        "响应带 ETag / Last-Modified / Accept-Ranges",
+        bool(
+            etag
+            and headers.get("last-modified")
+            and headers.get("accept-ranges") == "bytes"
+        ),
+        f"etag={etag}",
+    )
 
-    status, headers, body = client_get(host, port, "/index.html",
-                                      headers={"If-None-Match": etag or ""}, tls=tls)
-    ok &= expect("If-None-Match 命中 -> 304 且没有 body", status == 304 and body == b"",
-                 f"status={status} body={body[:20]!r}")
+    status, headers, body = client_get(
+        host,
+        port,
+        "/index.html",
+        headers={"If-None-Match": etag or ""},
+        tls=tls,
+    )
+    ok &= expect(
+        "If-None-Match 命中 -> 304 且没有 body",
+        status == 304 and body == b"",
+        f"status={status} body={body[:20]!r}",
+    )
 
-    status, headers, body = client_get(host, port, "/app.js", headers={"Range": "bytes=0-99"}, tls=tls)
-    ok &= expect("Range: bytes=0-99 -> 206 且正好 100 字节",
-                 status == 206 and len(body) == 100
-                 and headers.get("content-range") == f"bytes 0-99/{size}"
-                 and body == app_bytes[:100],
-                 f"status={status} len={len(body)} content-range={headers.get('content-range')}")
+    status, headers, body = client_get(
+        host, port, "/app.js", headers={"Range": "bytes=0-99"}, tls=tls
+    )
+    ok &= expect(
+        "Range: bytes=0-99 -> 206 且正好 100 字节",
+        status == 206
+        and len(body) == 100
+        and headers.get("content-range") == f"bytes 0-99/{size}"
+        and body == app_bytes[:100],
+        f"status={status} len={len(body)} content-range={headers.get('content-range')}",
+    )
 
-    status, headers, tail = client_get(host, port, "/app.js", headers={"Range": "bytes=-50"}, tls=tls)
-    ok &= expect("Range: bytes=-50 -> 最后 50 字节",
-                 status == 206 and tail == app_bytes[-50:], f"status={status} len={len(tail)}")
+    status, headers, tail = client_get(
+        host, port, "/app.js", headers={"Range": "bytes=-50"}, tls=tls
+    )
+    ok &= expect(
+        "Range: bytes=-50 -> 最后 50 字节",
+        status == 206 and tail == app_bytes[-50:],
+        f"status={status} len={len(tail)}",
+    )
 
-    status, headers, body = client_get(host, port, "/app.js", headers={"Range": f"bytes={size + 10}-"}, tls=tls)
+    status, headers, body = client_get(
+        host, port, "/app.js", headers={"Range": f"bytes={size + 10}-"}, tls=tls
+    )
     ok &= expect("越界 Range -> 416", status == 416, f"status={status}")
 
     status, _, _ = client_get(host, port, "/nope.html", tls=tls)
     ok &= expect("GET 不存在的文件 -> 404", status == 404, f"status={status}")
 
-    status, headers, head_body = client_get(host, port, "/app.js", tls=tls, method="HEAD")
-    ok &= expect("HEAD -> 200, 无 body, 但 Content-Length 是完整长度",
-                 status == 200 and head_body == b"" and int(headers.get("content-length", 0)) == size,
-                 f"status={status} len={headers.get('content-length')}")
+    status, headers, head_body = client_get(
+        host, port, "/app.js", tls=tls, method="HEAD"
+    )
+    ok &= expect(
+        "HEAD -> 200, 无 body, 但 Content-Length 是完整长度",
+        status == 200
+        and head_body == b""
+        and int(headers.get("content-length", 0)) == size,
+        f"status={status} len={headers.get('content-length')}",
+    )
 
     status, _, _ = client_get(host, port, "/../mini_http_server.py", tls=tls)
-    ok &= expect("路径穿越被拒 -> 403/404", status in (403, 404), f"status={status}")
+    ok &= expect(
+        "路径穿越被拒 -> 403/404", status in (403, 404), f"status={status}"
+    )
 
     status, headers, body = client_get(host, port, "/healthz", tls=tls)
-    ok &= expect("健康检查接口 -> 200 ok", status == 200 and body.strip() == b"ok", f"status={status}")
+    ok &= expect(
+        "健康检查接口 -> 200 ok",
+        status == 200 and body.strip() == b"ok",
+        f"status={status}",
+    )
 
     # keep-alive: 同一条连接上连发 3 个请求（客户端与服务器两侧都要正确分帧）
     client = RawHttpClient(host, port, tls=tls)
     try:
         codes = [client.request("/healthz")[0] for _ in range(3)]
-        ok &= expect("keep-alive: 一条连接上连发 3 个请求都成功", codes == [200, 200, 200], f"codes={codes}")
+        ok &= expect(
+            "keep-alive: 一条连接上连发 3 个请求都成功",
+            codes == [200, 200, 200],
+            f"codes={codes}",
+        )
         first, headers, _ = client.request("/app.js", {"Range": "bytes=0-9"})
         second, _, body2 = client.request("/app.js")
-        ok &= expect("keep-alive 下 206 与 200 混发不串包",
-                     first == 206 and second == 200 and len(body2) == size,
-                     f"first={first} second={second} len={len(body2)}")
+        ok &= expect(
+            "keep-alive 下 206 与 200 混发不串包",
+            first == 206 and second == 200 and len(body2) == size,
+            f"first={first} second={second} len={len(body2)}",
+        )
     finally:
         client.close()
 
@@ -641,10 +800,16 @@ def self_test(server, tls: bool = False) -> bool:
 
 
 # ================================================================ 压测
-def bench(server, label: str, requests_per_thread: int = 40, threads: int = 8,
-          keep_alive: bool = True, tls: bool = False) -> dict:
+def bench(
+    server,
+    label: str,
+    requests_per_thread: int = 40,
+    threads: int = 8,
+    keep_alive: bool = True,
+    tls: bool = False,
+) -> dict:
     host, port = server.address
-    path = "/app.js"                       # 64KB 文件, 能挡住小响应带来的失真
+    path = "/app.js"  # 64KB 文件, 能挡住小响应带来的失真
     errors: list[str] = []
 
     def worker() -> None:
@@ -656,7 +821,9 @@ def bench(server, label: str, requests_per_thread: int = 40, threads: int = 8,
                 if client is not None:
                     status, _, body = client.request(path)
                 else:
-                    status, _, body = client_get(host, port, path, tls=tls, timeout=15)
+                    status, _, body = client_get(
+                        host, port, path, tls=tls, timeout=15
+                    )
                 if status != 200 or len(body) == 0:
                     errors.append(f"status={status} len={len(body)}")
         except OSError as exc:
@@ -673,15 +840,25 @@ def bench(server, label: str, requests_per_thread: int = 40, threads: int = 8,
         w.join()
     wall = time.perf_counter() - started
     total = requests_per_thread * threads
-    return {"server": f"{server.name} / {label}", "requests": total, "errors": len(errors),
-            "wall_s": wall, "rps": total / wall, "metrics": server.metrics.summary()}
+    return {
+        "server": f"{server.name} / {label}",
+        "requests": total,
+        "errors": len(errors),
+        "wall_s": wall,
+        "rps": total / wall,
+        "metrics": server.metrics.summary(),
+    }
 
 
 # ================================================================ 主程序
 def prepare_www() -> None:
     os.makedirs(STATIC_ROOT, exist_ok=True)
-    with open(os.path.join(STATIC_ROOT, "index.html"), "w", encoding="utf-8") as fh:
-        fh.write("<!doctype html><meta charset=utf-8>\n<h1>mini http server</h1>\n")
+    with open(
+        os.path.join(STATIC_ROOT, "index.html"), "w", encoding="utf-8"
+    ) as fh:
+        fh.write(
+            "<!doctype html><meta charset=utf-8>\n<h1>mini http server</h1>\n"
+        )
     app_js = os.path.join(STATIC_ROOT, "app.js")
     if not os.path.exists(app_js) or os.path.getsize(app_js) < 64 * 1024:
         # 造一个 64KB 的静态文件, 用来做 Range / 压测
@@ -714,7 +891,9 @@ def main() -> None:
             tls_files = (cert, key)
             print(f"  使用自签证书: {cert}（由第 18 课生成）")
         else:
-            print("  找不到自签证书, 先跑一次 05_http/demo_18_https_tls.py 生成; 本次改用 HTTP。")
+            print(
+                "  找不到自签证书, 先跑一次 05_http/demo_18_https_tls.py 生成; 本次改用 HTTP。"
+            )
             use_tls = False
 
     # ---------------------------------------------------------------- 常驻模式
@@ -727,13 +906,13 @@ def main() -> None:
         print(f"  监听: {scheme}://{host}:{port}/")
         print(f"""
   手工验证清单（另开终端）:
-    curl -i {'-k ' if tls_files else ''}{scheme}://{host}:{port}/index.html
-    curl -I {'-k ' if tls_files else ''}{scheme}://{host}:{port}/app.js              # HEAD: 看长度和 ETag
-    curl -i {'-k ' if tls_files else ''}--range 0-99 {scheme}://{host}:{port}/app.js  # 206 Partial Content
-    curl -i {'-k ' if tls_files else ''}{scheme}://{host}:{port}/healthz
-    ETAG=$(curl -sI {'-k ' if tls_files else ''}{scheme}://{host}:{port}/app.js | awk -F': ' '/ETag/{{print $2}}' | tr -d '\\r')
-    curl -i {'-k ' if tls_files else ''}-H "If-None-Match: $ETAG" {scheme}://{host}:{port}/app.js   # 304
-    curl -v {'-k ' if tls_files else ''}{scheme}://{host}:{port}/app.js {scheme}://{host}:{port}/healthz  # 看连接复用
+    curl -i {"-k " if tls_files else ""}{scheme}://{host}:{port}/index.html
+    curl -I {"-k " if tls_files else ""}{scheme}://{host}:{port}/app.js              # HEAD: 看长度和 ETag
+    curl -i {"-k " if tls_files else ""}--range 0-99 {scheme}://{host}:{port}/app.js  # 206 Partial Content
+    curl -i {"-k " if tls_files else ""}{scheme}://{host}:{port}/healthz
+    ETAG=$(curl -sI {"-k " if tls_files else ""}{scheme}://{host}:{port}/app.js | awk -F': ' '/ETag/{{print $2}}' | tr -d '\\r')
+    curl -i {"-k " if tls_files else ""}-H "If-None-Match: $ETAG" {scheme}://{host}:{port}/app.js   # 304
+    curl -v {"-k " if tls_files else ""}{scheme}://{host}:{port}/app.js {scheme}://{host}:{port}/healthz  # 看连接复用
 """)
         signal.signal(signal.SIGINT, lambda *_: server.shutdown())
         try:
@@ -753,7 +932,7 @@ def main() -> None:
     print(f"  ThreadedServer 监听 {host}:{port}")
     ok_http = self_test(threaded)
 
-    ok_tls = None                          # None = 没跑（没有证书）
+    ok_tls = None  # None = 没跑（没有证书）
     tls_server = None
     if tls_files:
         print("\n  ── HTTPS（自签证书），线程模型 ──")
@@ -762,7 +941,9 @@ def main() -> None:
         print(f"  HTTPS 监听 {tls_server.address[0]}:{tls_server.address[1]}")
         ok_tls = self_test(tls_server, tls=True)
     else:
-        print("\n  （没有自签证书, 跳过 HTTPS 自测; 先跑 05_http/demo_18_https_tls.py 可生成）")
+        print(
+            "\n  （没有自签证书, 跳过 HTTPS 自测; 先跑 05_http/demo_18_https_tls.py 可生成）"
+        )
 
     # ---------------------------------------------------------------- 压测
     title("第 2 步：两种并发模型实测对比")
@@ -774,22 +955,32 @@ def main() -> None:
 """)
     results = []
     results.append(bench(threaded, "长连接", requests_per_thread=40))
-    results.append(bench(threaded, "短连接", requests_per_thread=20, keep_alive=False))
+    results.append(
+        bench(threaded, "短连接", requests_per_thread=20, keep_alive=False)
+    )
     if tls_server:
-        results.append(bench(tls_server, "长连接（TLS）", requests_per_thread=20, tls=True))
+        results.append(
+            bench(tls_server, "长连接（TLS）", requests_per_thread=20, tls=True)
+        )
 
     selector = SelectorServer(STATIC_ROOT)
     threading.Thread(target=selector.serve_forever, daemon=True).start()
     results.append(bench(selector, "长连接", requests_per_thread=40))
-    results.append(bench(selector, "短连接", requests_per_thread=20, keep_alive=False))
+    results.append(
+        bench(selector, "短连接", requests_per_thread=20, keep_alive=False)
+    )
 
-    print(f"  {'模型 / 客户端行为':<40}{'请求数':>7}{'耗时(s)':>9}{'QPS':>9}{'P50(ms)':>9}{'P99(ms)':>9}{'错误':>6}")
+    print(
+        f"  {'模型 / 客户端行为':<40}{'请求数':>7}{'耗时(s)':>9}{'QPS':>9}{'P50(ms)':>9}{'P99(ms)':>9}{'错误':>6}"
+    )
     for r in results:
         m = r["metrics"]
-        print(f"  {r['server']:<40}{r['requests']:>7}{r['wall_s']:>9.2f}{r['rps']:>9.1f}"
-              f"{m.get('p50_ms', 0):>9.2f}{m.get('p99_ms', 0):>9.2f}{r['errors']:>6}")
+        print(
+            f"  {r['server']:<40}{r['requests']:>7}{r['wall_s']:>9.2f}{r['rps']:>9.1f}"
+            f"{m.get('p50_ms', 0):>9.2f}{m.get('p99_ms', 0):>9.2f}{r['errors']:>6}"
+        )
 
-    print(f"""
+    print("""
   怎么读这张表:
     * 「长连接 vs 短连接」的差距通常最大: 短连接每次都付三次握手（第 10 课）,
       还要在关闭方留下 TIME_WAIT（第 13 课）。这就是「用连接池」的硬道理。
@@ -823,9 +1014,13 @@ def main() -> None:
         tls_server.shutdown()
 
     title("本课小结")
-    tls_verdict = "跳过（无证书）" if ok_tls is None else ("全部通过" if ok_tls else "有失败")
+    tls_verdict = (
+        "跳过（无证书）"
+        if ok_tls is None
+        else ("全部通过" if ok_tls else "有失败")
+    )
     print(f"""1. 一个完整的 HTTP 服务器 = 解析 + 路由 + 缓存协商 + Range + 并发模型 + 观测。
-2. 自测结果: HTTP {'全部通过' if ok_http else '有失败'}, HTTPS {tls_verdict}。
+2. 自测结果: HTTP {"全部通过" if ok_http else "有失败"}, HTTPS {tls_verdict}。
 3. 并发模型是架构选择, 不是性能参数: 线程模型好写, 事件循环能扛连接数。
 4. 缓存协商（304）和 Range（206）是「省流量 / 断点续传」的两个最实用的 HTTP 特性。
 5. 到这里, 从 IP 地址、端口、TCP、UDP 到 HTTP、TLS 的整条链路你已经亲手走了一遍。

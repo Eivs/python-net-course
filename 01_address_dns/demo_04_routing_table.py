@@ -43,7 +43,13 @@ def title(text: str) -> None:
 
 def run(cmd: list[str], timeout: float = 30.0) -> str:
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout).stdout
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=timeout,
+        ).stdout
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -51,9 +57,21 @@ def run(cmd: list[str], timeout: float = 30.0) -> str:
 def flag_legend(flags: str) -> str:
     """把 netstat 的标志位字母翻译成人话。"""
     table = {
-        "U": "路由可用", "G": "经由网关", "H": "主机路由(/32)", "S": "静态", "C": "克隆(由连接生成)",
-        "L": "链路层有效", "W": "克隆", "I": "由接口生成", "R": "拒绝", "B": "黑洞", "b": "广播",
-        "m": "组播", "c": "协议克隆", "g": "间接", "!": "不可用",
+        "U": "路由可用",
+        "G": "经由网关",
+        "H": "主机路由(/32)",
+        "S": "静态",
+        "C": "克隆(由连接生成)",
+        "L": "链路层有效",
+        "W": "克隆",
+        "I": "由接口生成",
+        "R": "拒绝",
+        "B": "黑洞",
+        "b": "广播",
+        "m": "组播",
+        "c": "协议克隆",
+        "g": "间接",
+        "!": "不可用",
     }
     return ", ".join(table.get(ch, ch) for ch in flags)
 
@@ -62,7 +80,9 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 1 步
     title("第 1 步：读真实路由表")
 
-    raw = run(["/usr/sbin/netstat", "-rn", "-f", "inet"]) or run(["netstat", "-rn", "-f", "inet"])
+    raw = run(["/usr/sbin/netstat", "-rn", "-f", "inet"]) or run(
+        ["netstat", "-rn", "-f", "inet"]
+    )
     if not raw:
         print("  无法读取路由表，跳过。")
     routes: list[dict] = []
@@ -71,13 +91,19 @@ def main() -> None:
         if line_no < 24:
             print(f"    {line}")
         parts = line.split()
-        if len(parts) >= 3 and parts[0] not in ("Routing", "Internet:", "Destination"):
-            routes.append({
-                "dest": parts[0],
-                "gateway": parts[1],
-                "flags": parts[2],
-                "netif": parts[3] if len(parts) > 3 else "-",
-            })
+        if len(parts) >= 3 and parts[0] not in (
+            "Routing",
+            "Internet:",
+            "Destination",
+        ):
+            routes.append(
+                {
+                    "dest": parts[0],
+                    "gateway": parts[1],
+                    "flags": parts[2],
+                    "netif": parts[3] if len(parts) > 3 else "-",
+                }
+            )
     print(f"  （共解析出 {len(routes)} 条 IPv4 路由）")
 
     # 本机出口 IP (UDP connect 不发包, 只查一次路由表)
@@ -93,13 +119,19 @@ def main() -> None:
             relevant.append(("关键路由", r))
             continue
         try:
-            if ipaddress.ip_address(local_ip) in ipaddress.ip_network(r["dest"], strict=False):
+            if ipaddress.ip_address(local_ip) in ipaddress.ip_network(
+                r["dest"], strict=False
+            ):
                 relevant.append(("命中本机的路由", r))
         except ValueError:
             continue
-    print(f"\n  只看与 192.168.1.10 这类「我的流量」有关的路由（本机出口 IP = {local_ip}）:")
+    print(
+        f"\n  只看与 192.168.1.10 这类「我的流量」有关的路由（本机出口 IP = {local_ip}）:"
+    )
     for tag, r in relevant:
-        print(f"    [{tag:<8}] {r['dest']:<20} 网关={r['gateway']:<18} 标志={r['flags']:<7} 出口={r['netif']}")
+        print(
+            f"    [{tag:<8}] {r['dest']:<20} 网关={r['gateway']:<18} 标志={r['flags']:<7} 出口={r['netif']}"
+        )
 
     print("\n  逐列解释:")
     print("""    Destination  目标网段。default 表示「其他所有地址」
@@ -112,7 +144,9 @@ def main() -> None:
 
     default = [r for r in routes if r["dest"] == "default"]
     for r in default:
-        print(f"  default -> 网关 {r['gateway']:<18} 网卡 {r['netif']:<6} ({flag_legend(r['flags'])})")
+        print(
+            f"  default -> 网关 {r['gateway']:<18} 网卡 {r['netif']:<6} ({flag_legend(r['flags'])})"
+        )
     if len(default) > 1:
         print("""
   注意: 这台机器有多条默认路由（物理网卡 + VPN 隧道 + 虚拟机网桥）。
@@ -142,7 +176,9 @@ def main() -> None:
             s.connect((ip, port))
             src_ip, src_port = s.getsockname()
             results[ip] = src_ip
-            print(f"  目标 {ip:<16} 源 IP {src_ip:<16} 源端口 {src_port:<6} {note}")
+            print(
+                f"  目标 {ip:<16} 源 IP {src_ip:<16} 源端口 {src_port:<6} {note}"
+            )
         except OSError as exc:
             print(f"  目标 {ip:<16} 无路由: {exc}  ({note})")
         finally:
@@ -175,12 +211,18 @@ def main() -> None:
             matches.append((net.prefixlen, net, r))
 
     if matches:
-        matches.sort(key=lambda item: item[0], reverse=True)   # 只按前缀长度排, 避免去比 dict
+        matches.sort(
+            key=lambda item: item[0], reverse=True
+        )  # 只按前缀长度排, 避免去比 dict
         for prefixlen, net, r in matches:
-            print(f"  /{prefixlen:<3} {str(net):<20} 出口 {r['netif']:<6} 网关列={r['gateway']:<16} 标志={r['flags']}")
+            print(
+                f"  /{prefixlen:<3} {str(net):<20} 出口 {r['netif']:<6} 网关列={r['gateway']:<16} 标志={r['flags']}"
+            )
         _, best_net, best_r = matches[0]
-        print(f"  -> 胜出的是 /{best_net.prefixlen} 的 {best_net}, 出口网卡 {best_r['netif']}；"
-              f"default(/0) 只有在没有更长匹配时才会用到。")
+        print(
+            f"  -> 胜出的是 /{best_net.prefixlen} 的 {best_net}, 出口网卡 {best_r['netif']}；"
+            f"default(/0) 只有在没有更长匹配时才会用到。"
+        )
     print("""
   匹配规则: 在所有匹配的路由里挑「前缀最长」的那条, 而不是最先出现的、也不是最具体的网关。
     /32 主机路由  >  /24 网段  >  /8  >  default(/0)
@@ -195,7 +237,20 @@ def main() -> None:
 并回一个 ICMP Time Exceeded; 源端于是知道第 1 跳是谁。然后 TTL=2, 3, ...
 逐跳把整条路径「问」出来。这也是「目的地不可达」之外 ICMP 的另一大用途。
 """)
-    out = run(["/usr/sbin/traceroute", "-m", "8", "-q", "1", "-w", "1", "-n", "1.1.1.1"], timeout=40)
+    out = run(
+        [
+            "/usr/sbin/traceroute",
+            "-m",
+            "8",
+            "-q",
+            "1",
+            "-w",
+            "1",
+            "-n",
+            "1.1.1.1",
+        ],
+        timeout=40,
+    )
     if out.strip():
         for line in out.strip().splitlines()[:12]:
             print(f"  {line}")
@@ -210,7 +265,9 @@ def main() -> None:
   注意 TTL 是 IPv4 的字段, IPv6 里改名叫 Hop Limit, 作用一样。
 """)
     else:
-        print("  traceroute 不可用或被网络策略挡住，跳过（不影响本课其它结论）。")
+        print(
+            "  traceroute 不可用或被网络策略挡住，跳过（不影响本课其它结论）。"
+        )
 
     title("本课小结")
     print("""1. 内核靠路由表决定出口网卡和下一跳, 规则是「最长前缀匹配」。
