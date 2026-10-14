@@ -65,8 +65,8 @@ def parse_ifconfig() -> list[dict]:
     输出形如:
         en0: flags=8863<UP,BROADCAST,...> mtu 1500
             ether 00:1a:2b:3c:4d:5e
-            inet 192.168.1.10 netmask 0xfffffe00 broadcast 192.168.1.255
-            inet6 fe80::889:e9fd:4ff5:6753%en0 prefixlen 64 secured scopeid 0xe
+            inet 192.168.1.10 netmask 0xffffff00 broadcast 192.168.1.255
+            inet6 fe80::1%en0 prefixlen 64 secured scopeid 0xe
     """
     text = run(["/sbin/ifconfig", "-a"]) or run(["ifconfig", "-a"])
     ifaces: list[dict] = []
@@ -233,7 +233,7 @@ def main() -> None:
         for ln in lines[:6]:
             print(f"  {ln}")
         print("""
-  ARP 表 = IP -> MAC 的缓存。发第一个包之前必须先「喊一声」：谁是 192.168.1.1?
+  ARP 表 = IP -> MAC 的缓存。发第一个包之前必须先「喊一声」：谁是 192.168.1.1?（默认网关）
   拿到 MAC 之后才构造以太网帧。缓存过期就再喊一次。
   如果表里出现 (incomplete) 或某个 IP 一直是同一个 MAC, 可能是 ARP 欺骗的迹象。
 """)
@@ -247,7 +247,7 @@ def main() -> None:
   * 用 if_nametoindex() 把网卡名换成内核索引, 用于绑定到特定网卡
   * 用 UDP 广播把包发给整个网段（下一课演示 UDP 时会用到）
 """)
-    for name in ["lo0", "en0", "utun10", "definitely_not_a_nic"]:
+    for name in ["lo0", "en0", "utun0", "definitely_not_a_nic"]:
         try:
             print(f"  if_nametoindex({name!r}) = {socket.if_nametoindex(name)}")
         except OSError as exc:

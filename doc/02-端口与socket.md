@@ -142,40 +142,46 @@ s.bind(("", 0))               # 端口 0 = 让内核分配
 **系统里都有谁在监听**：
 
 ```text
-  COMMAND     PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
-  ControlCe   638 example    9u  IPv4 0xce3a5fe079dd3093      0t0  TCP *:7000 (LISTEN)
-  ControlCe   638 example   10u  IPv6 0x1e46a9b044fdd5ef      0t0  TCP *:7000 (LISTEN)
-  ControlCe   638 example   11u  IPv4 0x4c832ce225db54cf      0t0  TCP *:5000 (LISTEN)
+  COMMAND   PID  USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+  nginx    1234  web     9u  IPv4 0x...              0t0  TCP *:8080 (LISTEN)
+  postgres 5678  db     11u  IPv4 0x...              0t0  TCP 127.0.0.1:5432 (LISTEN)
+  sshd      901  root    3u  IPv6 0x...              0t0  TCP *:22 (LISTEN)
 ```
 
-`*:7000` 表示绑定在 `0.0.0.0:7000`（所有网卡），而 `127.0.0.1:5432` 表示只有本机能访问。
+（本段已脱敏：进程名 / PID / 用户名换成了通用示例。）
+
+`*:8080` 表示绑定在 `0.0.0.0:8080`（所有网卡），而 `127.0.0.1:5432` 表示只有本机能访问。
 **这个区别决定了服务能不能被外部访问，也是安全审计的第一眼。**
 
 **自己起的服务能被 lsof 认出来**（含启动命令）：
 
 ```text
   lsof 里查这个端口:
-    python3.1 94039 example    3u  IPv4 0xea73bcca13e7e6bd      0t0  TCP 127.0.0.1:60827 (LISTEN)
-  解读: 进程名=python3.1 PID=94039 用户=example 监听地址=127.0.0.1:60827
+    python3.1 <PID> <用户名>    3u  IPv4 0x...      0t0  TCP 127.0.0.1:<端口> (LISTEN)
+  解读: 进程名=python3.1 PID=<PID> 用户=<用户名> 监听地址=127.0.0.1:<端口>
   把这个 PID 拿去 `ps -p <PID> -o command=` 就能看到完整的启动命令行,
   这是「线上服务找不到是谁启的」的标准排查套路。
       PID USER COMMAND
-    94039 example /Users/example/.pyenv/versions/3.13.0/bin/python3 ./02_port_socket/demo_06_port_observer.py
+    <PID> <用户名> /path/to/python3 ./02_port_socket/demo_06_port_observer.py
 ```
 
-**这台机器此刻的连接状态分布**（389 条 TCP socket）：
+（本段已脱敏：PID / 用户名 / 家目录换成了占位符。）
+
+**连接状态分布**（示例输出的形状，具体数量随机器与时刻而变）：
 
 ```text
-  这台机器当前共 389 条 TCP socket, 状态分布:
-    ESTABLISHED      213
-    LISTEN            33
-    TIME_WAIT         17
-    CLOSE_WAIT        10
+  这台机器当前共 <N> 条 TCP socket, 状态分布:
+    ESTABLISHED      <多数>
+    LISTEN           <几十条>
+    TIME_WAIT        <十几条>
+    CLOSE_WAIT       <可能有>
 ```
 
-**这里有一个真实的教学点**：`CLOSE_WAIT 10` 说明这台机器上**有程序收到 FIN 后没关闭连接**
-（通常是常驻 GUI/后台进程的连接泄漏）。这不是演示数据，是真实观察到的问题。
-排查顺序永远是：`netstat` 看到异常 → `lsof` 定位到 PID → `ps` 看是谁 → 修代码或重启。
+（本段已泛化：数量随机器而变，所以只保留形状。）
+
+**这里有一个真实的教学点**：跑的时候确实观察到过 `CLOSE_WAIT` —— 说明
+有进程收到 FIN 后没关连接。这是真实世界里很常见的连接泄漏（尤其是常驻的 GUI/后台进程），
+不是教学编造的例子。排查顺序永远是：`netstat` 看到异常 → `lsof` 定位到 PID → `ps` 看是谁 → 修代码或重启。
 
 ### 【坑】
 

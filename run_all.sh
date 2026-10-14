@@ -73,27 +73,22 @@ done < <(printf '%s\n' "$files")
 
 echo
 echo "================= 一致性检查 ================="
-# 检查器：1) 课程链（课号/下一课指针/doc 链接） 2) doc 里的实测引用是否都有日志出处
-# 它们也会计入下面的汇总：任何一项失败都让 run_all.sh 以非 0 退出。
-if [ -f tools/check_lesson_chain.py ]; then
-    if "$PY" tools/check_lesson_chain.py; then
+# 三个检查器：课程链（课号/下一课指针/doc 链接）、隐私底线（不把本机信息写进文案）、
+# doc 引文是否有日志出处。任何一项失败都会计入下面的汇总并以非 0 退出。
+for checker in tools/check_lesson_chain.py tools/check_no_local_data.py tools/check_doc_quotes.py; do
+    [ -f "$checker" ] || continue
+    name="$(basename "$checker" .py)"
+    if [ "$name" = "check_doc_quotes" ] && [ "${DEGRADED:-0}" = "1" ]; then
+        echo "[跳过] $name: 降级模式的日志不完整（缺 dig/openssl/sysctl 段），比对必然失败"
+        continue
+    fi
+    if "$PY" "$checker"; then
         :
     else
         fail=$((fail + 1))
-        failed_list+=("check_lesson_chain")
+        failed_list+=("$name")
     fi
-fi
-if [ -d .logs ] && [ -f tools/check_doc_quotes.py ]; then
-    if [ "${DEGRADED:-0}" = "1" ]; then
-        echo "[跳过] doc 引用校验: 降级模式下日志里没有 dig/openssl/sysctl 那几段输出,"
-        echo "       比对必然失败。想看完整校验请用正常模式: bash run_all.sh"
-    elif "$PY" tools/check_doc_quotes.py; then
-        :
-    else
-        fail=$((fail + 1))
-        failed_list+=("check_doc_quotes")
-    fi
-fi
+done
 
 echo
 echo "================= 汇总 ================="

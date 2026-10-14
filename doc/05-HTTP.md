@@ -310,6 +310,9 @@ session.mount("https://", HTTPAdapter(max_retries=Retry(
     200  最终地址 https://github.com/
 ```
 
+（本段随网络波动：能联外网时如上；被墙或超时时脚本会打印
+`网络不可用, 跳过: <urlopen error timed out>` 并继续往下跑（不会崩）。）
+
 ### 【坑】
 
 - **不设超时**：这是生产事故第一名（线程/连接被永久占住）。

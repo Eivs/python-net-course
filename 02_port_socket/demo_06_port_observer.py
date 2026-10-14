@@ -93,11 +93,11 @@ def main() -> None:
     print(f"  ...共 {max(len(lines) - 1, 0)} 个监听 socket\n")
 
     print("""  列的含义:
-      COMMAND  PID USER  FD   TYPE  DEVICE  SIZE/OFF  NODE  NAME
-      ControlCe 638 example  9u   IPv4  0x...   0t0     TCP   *:7000 (LISTEN)
-      ^进程名    ^PID         ^文件描述符        ^协议  ^地址:端口  ^状态
+      COMMAND   PID  USER   FD   TYPE  DEVICE  SIZE/OFF  NODE  NAME
+      nginx    1234  web     9u   IPv4  0x...   0t0     TCP   *:8080 (LISTEN)
+      ^进程名   ^PID  ^用户  ^文件描述符     ^协议  ^地址:端口  ^状态
 
-    NAME 里的 `*:7000` 表示绑定在 0.0.0.0:7000（所有网卡），
+    NAME 里的 `*:8080` 表示绑定在 0.0.0.0:8080（所有网卡），
     如果是 `127.0.0.1:5432` 就只有本机能访问。这个区别决定了服务能不能被外部访问,
     也是安全审计的第一眼。
 """)
