@@ -223,7 +223,7 @@ Python 里两种常见写法:
 4. 0.0.0.0 / 127.0.0.1 / 私网段 各有明确语义, 写代码时经常踩坑。
 5. 只靠 IP 只能找到「机器」, 找到「进程」还需要端口 -> 下一课。
 """)
-    print("下一课: 02_port_socket/demo_05_port_basics.py")
+    print("下一课: 01_address_dns/demo_02_dns_lookup.py")
 
 
 if __name__ == "__main__":

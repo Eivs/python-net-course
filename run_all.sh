@@ -72,6 +72,30 @@ while IFS= read -r file; do
 done < <(printf '%s\n' "$files")
 
 echo
+echo "================= 一致性检查 ================="
+# 检查器：1) 课程链（课号/下一课指针/doc 链接） 2) doc 里的实测引用是否都有日志出处
+# 它们也会计入下面的汇总：任何一项失败都让 run_all.sh 以非 0 退出。
+if [ -f tools/check_lesson_chain.py ]; then
+    if "$PY" tools/check_lesson_chain.py; then
+        :
+    else
+        fail=$((fail + 1))
+        failed_list+=("check_lesson_chain")
+    fi
+fi
+if [ -d .logs ] && [ -f tools/check_doc_quotes.py ]; then
+    if [ "${DEGRADED:-0}" = "1" ]; then
+        echo "[跳过] doc 引用校验: 降级模式下日志里没有 dig/openssl/sysctl 那几段输出,"
+        echo "       比对必然失败。想看完整校验请用正常模式: bash run_all.sh"
+    elif "$PY" tools/check_doc_quotes.py; then
+        :
+    else
+        fail=$((fail + 1))
+        failed_list+=("check_doc_quotes")
+    fi
+fi
+
+echo
 echo "================= 汇总 ================="
 echo "通过: $pass   失败: $fail"
 if [ "$fail" -gt 0 ]; then

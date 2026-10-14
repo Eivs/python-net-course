@@ -258,9 +258,9 @@ def main() -> None:
 3. 永远用 getaddrinfo, 它一次给你 IPv4+IPv6+所有可用走法。
 4. 一个域名多个 IP 是常态, 客户端要会挑、会重试。
 5. 首次请求慢常常是 DNS 冷缓存, 不是网络慢。
-6. 下一步: 光有 IP 只能找到机器, 找到进程要用端口 -> 第 2 课。
+6. 下一步: 先弄清「本机有哪些网卡、包从哪张网卡出去」（第 3、4 课），端口要到第 5 课才讲。
 """)
-    print("下一课: 02_port_socket/demo_05_port_basics.py")
+    print("下一课: 01_address_dns/demo_03_local_interfaces.py")
 
 
 if __name__ == "__main__":

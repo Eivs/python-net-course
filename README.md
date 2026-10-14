@@ -84,8 +84,9 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
   | [`doc/09-进阶路线.md`](doc/09-进阶路线.md) | 自评表 + 十个方向 + 三个练手项目 |
 
 - `NOTES.md` — 速查手册（分层模型、握手/挥手/TLS 时序图、状态机、端口表、排障决策树）
-- `tools/check_doc_quotes.py` — 校验 `doc/` 里的实测引用都有 `.logs/` 出处（`bash run_all.sh && python3 tools/check_doc_quotes.py`）
-- `run_all.sh` — 顺序跑完所有示例并汇总
+- `tools/check_lesson_chain.py` — 校验课程链（课号连续、每个「下一课」都指向第 N+1 课、doc 链接存在）
+- `tools/check_doc_quotes.py` — 校验 `doc/` 里的实测引用都有 `.logs/` 出处
+- `run_all.sh` — 顺序跑完所有示例、跑两个检查器、最后汇总（任何一项失败都会非 0 退出）
 - `.logs/` — 运行输出（不纳入版本管理）
 
 ---
