@@ -66,8 +66,13 @@ def main() -> None:
     print(f"getaddrinfo({host!r}, 80, proto=TCP) 共 {len(infos)} 条:")
     families = {socket.AF_INET: "IPv4", socket.AF_INET6: "IPv6"}
     for family, socktype, proto, canonname, sockaddr in infos:
-        type_name = {socket.SOCK_STREAM: "TCP流", socket.SOCK_DGRAM: "UDP报文"}.get(socktype, socktype)
-        print(f"  {families.get(family, family):<5} {type_name:<6} proto={proto:<3} 规范名={canonname or '-':<12} sockaddr={sockaddr}")
+        type_name = {
+            socket.SOCK_STREAM: "TCP流",
+            socket.SOCK_DGRAM: "UDP报文",
+        }.get(socktype, socktype)
+        print(
+            f"  {families.get(family, family):<5} {type_name:<6} proto={proto:<3} 规范名={canonname or '-':<12} sockaddr={sockaddr}"
+        )
 
     print("""
 注意 sockaddr 是元组, 不是字符串:
@@ -81,13 +86,17 @@ def main() -> None:
 
     for h in hosts:
         try:
-            v4 = socket.gethostbyname(h)          # 只返回第一个 IPv4
-            print(f"  gethostbyname({h!r})      = {v4}          <- 只给 1 个, 且忽略 IPv6")
+            v4 = socket.gethostbyname(h)  # 只返回第一个 IPv4
+            print(
+                f"  gethostbyname({h!r})      = {v4}          <- 只给 1 个, 且忽略 IPv6"
+            )
         except OSError as exc:
             print(f"  gethostbyname({h!r}) 失败: {exc}")
         try:
-            name, aliases, addrs = socket.gethostbyname_ex(h)   # 返回全部 IPv4
-            print(f"  gethostbyname_ex({h!r})   = 规范名={name} 别名={aliases} 所有IPv4={addrs}")
+            name, aliases, addrs = socket.gethostbyname_ex(h)  # 返回全部 IPv4
+            print(
+                f"  gethostbyname_ex({h!r})   = 规范名={name} 别名={aliases} 所有IPv4={addrs}"
+            )
         except OSError as exc:
             print(f"  gethostbyname_ex({h!r}) 失败: {exc}")
 
@@ -122,24 +131,37 @@ def main() -> None:
     title("第 4 步：本地 hosts 文件优先于 DNS")
 
     hosts_path = "/etc/hosts"
+    max_hosts_lines = 10  # 只展示前 10 条: 本机 hosts 可能有几百条, 全打出来会盖住重点
     print(f"{hosts_path} 内容里非注释的部分（解析顺序: hosts 文件 -> DNS）:")
     try:
         with open(hosts_path, "r", encoding="utf-8", errors="replace") as fh:
-            shown = 0
+            entries = []
             for line in fh:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                print(f"  {line}")
-                shown += 1
-            if shown == 0:
-                print("  (没有自定义条目)")
+                entries.append(line)
+        for line in entries[:max_hosts_lines]:
+            print(f"  {line}")
+        if not entries:
+            print("  (没有自定义条目)")
+        elif len(entries) > max_hosts_lines:
+            loopback = sum(
+                1 for e in entries if e.split()[0] in ("127.0.0.1", "::1")
+            )
+            print(
+                f"  ...（共 {len(entries)} 条, 上面只显示前 {max_hosts_lines} 条;"
+                f"其中 {loopback} 条指向本机回环（典型的「本地劫持」））"
+            )
+            print("      想看全部: grep -v '^#' /etc/hosts")
     except OSError as exc:
         print(f"  读取失败: {exc}")
 
     print("""
 这就是为什么改 hosts 能「本地劫持」域名: 系统在真正发出 DNS 查询前，
 先查这张本地表。开发时把 api.example.com 指向 127.0.0.1 就是这么干的。
+上面那几百条里很多是指向回环的本地开发/代理条目（Charles、内网域名等），
+它们优先级高于 DNS —— 所以「为什么我的请求没走到线上」经常答案就在这张表里。
 注意: 现在 Python 里没法自己往这张表里塞条目（历史上 SocketServer 那套已废弃），
       只能改文件。
 """)
@@ -177,8 +199,10 @@ def main() -> None:
         time.sleep(0.05)
 
     if len(samples) >= 2:
-        print(f"\n  第 1 次 {samples[0]:.3f} ms vs 第 2 次 {samples[1]:.3f} ms"
-              f"  ->  快了 {samples[0] / max(samples[1], 1e-6):.1f} 倍")
+        print(
+            f"\n  第 1 次 {samples[0]:.3f} ms vs 第 2 次 {samples[1]:.3f} ms"
+            f"  ->  快了 {samples[0] / max(samples[1], 1e-6):.1f} 倍"
+        )
         print("""
   加速来自三层缓存:
     1) 操作系统/系统解析器缓存 (macOS 由 mDNSResponder 管)
@@ -192,8 +216,16 @@ def main() -> None:
     title("第 7 步：我的机器到底在用哪台 DNS 服务器？")
 
     if shutil.which("scutil"):
-        out = subprocess.run(["scutil", "--dns"], capture_output=True, text=True, errors="replace", timeout=5).stdout
-        server_lines = [ln.strip() for ln in out.splitlines() if "nameserver" in ln]
+        out = subprocess.run(
+            ["scutil", "--dns"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=5,
+        ).stdout
+        server_lines = [
+            ln.strip() for ln in out.splitlines() if "nameserver" in ln
+        ]
         for ln in server_lines[:10]:
             print(f"  {ln}")
         print("""
@@ -208,7 +240,10 @@ def main() -> None:
     if shutil.which("dig"):
         out = subprocess.run(
             ["dig", "+noall", "+answer", "+stats", "example.com", "A"],
-            capture_output=True, text=True, errors="replace", timeout=10,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=10,
         ).stdout
         for ln in out.strip().splitlines()[:14]:
             print(f"    {ln}")

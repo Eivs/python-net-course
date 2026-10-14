@@ -116,6 +116,24 @@ local_ip, local_port = probe.getsockname()
 
 解析顺序里最关键的一条：**hosts 文件优先于 DNS**。这就是本地调试改 hosts 能生效的原因。
 
+```text
+/etc/hosts 内容里非注释的部分（解析顺序: hosts 文件 -> DNS）:
+  0.0.0.0   example-host.local
+  127.0.0.1 example-host.local
+  127.0.0.1 localhost.example-proxy.com
+  127.0.0.1 localhost
+  255.255.255.255 broadcasthost
+  ...（共 276 条, 上面只显示前 10 条;其中 23 条指向本机回环（典型的「本地劫持」））
+      想看全部: grep -v '^#' /etc/hosts
+```
+
+（上面省略了中间几行，完整 10 行在 `.logs/demo_02_dns_lookup.log` 里；
+本机 `/etc/hosts` 有 276 条非注释条目，**全打出来会盖住重点，所以脚本只取前 10 行**。）
+
+这张表值得看的原因：里面 **23 条指向回环**的条目（`localhost.example-proxy.com`、内网域名、
+本地开发服务…）优先级高于 DNS。所以「为什么我的请求没走到线上」经常答案就在这张表里——
+排查任何「本地/某些人正常、线上/其他人不正常」的问题，先看一眼自己的 hosts。
+
 ### 【代码要点】
 
 ```python
