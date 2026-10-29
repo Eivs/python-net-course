@@ -15,14 +15,14 @@
 | 输出 | `.logs/demo_XX_*.log` | 真实运行结果（本机 19/19 通过），文档里引用的数字都出自这里 |
 | 文档 | `doc/0X-*.md`（你正在看的） | 把「原理 → 代码 → 实测 → 坑 → 练习」串成一条可读的线 |
 | 速查 | `../NOTES.md` | 表格化速查（端口表、状态表、选项表、排障树） |
-| 校验 | `../tools/check_*.py` | 三个检查器：课程链自洽、隐私底线、实测引用有日志出处 |
+| 校验 | `../tools/check_*.py` | 三个检查器：课程链自洽、隐私底线、实测引用有日志出处（只认本次运行清单） |
 
 **校验文档自身**（可选，但推荐）：
 
 ```bash
 bash run_all.sh                       # 跑完示例后会依次执行三个检查器
 python3 tools/check_doc_quotes.py     # 校验 doc/ 里的实测引用都有日志出处
-python3 tools/check_no_local_data.py  # 校验文案里没有本机私有信息
+python3 tools/check_no_local_data.py  # 校验文案里没有本机私有信息（本机规则见 tools/privacy_patterns.example）
 python3 tools/check_lesson_chain.py   # 校验课程链（课号、下一课指针）自洽
 ```
 
@@ -30,6 +30,10 @@ python3 tools/check_lesson_chain.py   # 校验课程链（课号、下一课指�
 ① 涉及本机私有的值（内网 IP、MAC、主机名、用户名、家目录、hosts 条目、私有 DNS）
 一律换成通用示例或占位符，并在引文块旁标注「已泛化 / 已脱敏」；
 ② 带这类标注的块会被 `check_doc_quotes.py` 跳过逐字校验 —— 所以「脱敏」与「有出处」两件事能共存。
+
+检查器本身只带**通用规则**；某台机器特有的值请写进 `tools/privacy_patterns.local`
+（从 `tools/privacy_patterns.example` 复制，该文件不入库）。降级运行的日志在
+`.logs-degraded/`，不会覆盖 `.logs/` 里的完整证据。
 
 **读法建议**（每一章都这么走一遍）：
 

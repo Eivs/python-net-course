@@ -15,8 +15,9 @@ TIME_WAIT/CLOSE_WAIT/206/304 都是从内核和真实响应里读出来的。
 - **只用标准库**，不需要 `pip install` 任何东西
 - 需要 Python **3.10+**：代码里用到 `X | None` 类型标注（配 `from __future__ import annotations`），
   未使用 `match`/`except*`/`type` 语句等 3.11+ 专有语法；**实测环境是 Python 3.13**
-- 每课都会**自动降级**：没网、没 `dig`、没 `openssl`、没 `sysctl` 时不会崩，会跳过对应实验并说明
-  （`DEGRADED=1 bash run_all.sh` 实测 19/19 通过）
+- 每课都会**自动降级**：没网、没 `dig`、没 `openssl`、没 `sysctl`/`lsof`/`netstat` 时不会崩，
+  会跳过对应实验并说明（`DEGRADED=1 bash run_all.sh` 实测 19/19 通过）
+- 降级运行的日志单独写到 `.logs-degraded/`，**不会覆盖** `.logs/` 里的完整证据
 
 ---
 
@@ -85,9 +86,11 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
 
 - `NOTES.md` — 速查手册（分层模型、握手/挥手/TLS 时序图、状态机、端口表、排障决策树）
 - `tools/check_lesson_chain.py` — 校验课程链（课号连续、每个「下一课」都指向第 N+1 课、doc 链接存在）
-- `tools/check_doc_quotes.py` — 校验 `doc/` 里的实测引用都有 `.logs/` 出处
-- `run_all.sh` — 顺序跑完所有示例、跑两个检查器、最后汇总（任何一项失败都会非 0 退出）
-- `.logs/` — 运行输出（不纳入版本管理）
+- `tools/check_doc_quotes.py` — 校验 `doc/` 里的实测引用都有 `.logs/` 出处（只认本次运行的清单）
+- `tools/check_no_local_data.py` — 校验文案里没有本机私有信息（通用规则入库 + 本机规则不入库）
+- `tools/privacy_patterns.example` — 本机隐私规则模板；复制成 `tools/privacy_patterns.local` 后填入自己的敏感值
+- `run_all.sh` — 顺序跑完所有示例、跑三个检查器、最后汇总（任何一项失败都会非 0 退出）
+- `.logs/` — 完整运行输出（不纳入版本管理）；`.logs-degraded/` 是降级模式的输出
 
 ---
 
@@ -155,10 +158,13 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
    （内网 IP、MAC、主机名、用户名、家目录、hosts 条目、私有 DNS）——
    这些值在 `doc/` 里一律泛化/脱敏成通用示例（如 `192.168.1.10`、`00:1a:2b:3c:4d:5e`、`<用户名>`），
    并在引文块旁标注；`tools/check_no_local_data.py` 会拦住漏网的。
-   运行时输出本身（`.logs/`）是你自己机器的，不入版本管理。
+   该检查器本身只带**通用规则**（任何人的家目录、真实 MAC 形态），
+   你这台机器特有的值放在 `tools/privacy_patterns.local`——这个文件**不入库**，
+   所以「隐私清单」不会反过来变成泄漏。运行时输出本身（`.logs/`）也是你本机的，不入版本管理。
 
 1. **全量回归**：`bash run_all.sh` 一次跑完全部 19 个示例 + 三个一致性检查器 → 全绿；
-   每个脚本的完整输出都留在 `.logs/`。
+   每个脚本的完整输出都留在 `.logs/`，本次运行清单写在 `.logs/.manifest`，
+   `check_doc_quotes` 只拿清单里的日志当证据（不会误用旧日志）。
 2. **关键数字直接读系统**：MTU/MSS 来自 `getsockopt(TCP_MAXSEG)` 与 `ifconfig`；
    TIME_WAIT 时长来自 `sysctl net.inet.tcp.msl`；连接建立超时来自 `net.inet.tcp.keepinit`；
    临时端口范围来自 `net.inet.ip.portrange.*`；端口占用来自 `lsof`/`netstat`。
@@ -166,7 +172,8 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
    CLOSE_WAIT 复现、`listen(1)` 下 6 次连接只成功 1 次、TIME_WAIT 在 t+30s 归零、
    TLS 证书链 4 张、自签证书四种校验结果各不相同。
 4. **降级路径也要测**：`DEGRADED=1 bash run_all.sh` 把子进程的 `PATH` 指向空目录
-  （等于 dig/openssl/sysctl/lsof 全不存在），确认 19/19 仍然通过、只跳过实验而不报错崩溃。
+  （dig/openssl/sysctl/lsof/netstat 全部走 PATH 查找，因此这时是真的找不到），
+  确认 19/19 仍然通过、只跳过实验而不报错崩溃；日志写到 `.logs-degraded/`，不覆盖 `.logs/`。
 
 ---
 
