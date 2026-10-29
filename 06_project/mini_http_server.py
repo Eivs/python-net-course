@@ -152,7 +152,15 @@ def parse_request(buf: bytearray) -> tuple[Request | None, int]:
     if version == "HTTP/1.1" and "host" not in headers:
         raise BadRequest("HTTP/1.1 必须带 Host")
 
-    length = int(headers.get("content-length", "0") or 0)
+    raw_length = headers.get("content-length", "0") or "0"
+    try:
+        length = int(raw_length)
+    except ValueError:
+        # 一个 "Content-Length: abc" 就足以让整个事件循环崩掉（曾实测复现），
+        # 所以这里必须把它变成 400，而不是让 ValueError 冒到 serve_forever。
+        raise BadRequest(f"Content-Length 不是整数: {raw_length!r}") from None
+    if length < 0:
+        raise BadRequest(f"Content-Length 不能为负: {length}")
     total = head_end + 4 + length
     if len(buf) < total:
         raise Incomplete
@@ -456,13 +464,14 @@ class SelectorServer:
 
     # ---- 每个连接的状态 ----
     class _Conn:
-        __slots__ = ("sock", "inbuf", "outbuf", "close_when_drained")
+        __slots__ = ("sock", "inbuf", "outbuf", "close_when_drained", "eof")
 
         def __init__(self, sock: socket.socket):
             self.sock = sock
             self.inbuf = bytearray()
             self.outbuf = bytearray()
             self.close_when_drained = False
+            self.eof = False
 
     def serve_forever(self) -> None:
         while not self._stop:
@@ -495,8 +504,13 @@ class SelectorServer:
             except OSError:
                 self._drop(sock)
                 return
-            if chunk == b"":  # 对端关闭(EOF): 无论缓冲区里有什么都收工
-                self._drop(sock)
+            if chunk == b"":
+                # 对端半关闭（shutdown(SHUT_WR) 是合法行为）：不能再读了，
+                # 但缓冲区里可能还有完整请求、写队列里可能还有没发完的响应。
+                # 直接 drop 会吞掉响应，正确做法是「处理完 + 发完再关」。
+                state.eof = True
+                state.close_when_drained = True
+                self._consume_requests(state)
                 return
             if chunk:
                 state.inbuf += chunk
@@ -547,13 +561,15 @@ class SelectorServer:
             return
         del state.outbuf[:sent]
         if state.outbuf:
-            self.selector.modify(
-                state.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, state
-            )
+            events = selectors.EVENT_WRITE
+            if not state.eof:
+                events |= selectors.EVENT_READ
+            self.selector.modify(state.sock, events, state)
         elif state.close_when_drained:
             self._drop(state.sock)
         else:
-            self.selector.modify(state.sock, selectors.EVENT_READ, state)
+            events = selectors.EVENT_WRITE if state.eof else selectors.EVENT_READ
+            self.selector.modify(state.sock, events, state)
 
     def _drop(self, sock: socket.socket) -> None:
         try:
@@ -795,6 +811,28 @@ def self_test(server, tls: bool = False) -> bool:
         )
     finally:
         client.close()
+
+    # 畸形 Content-Length: 必须回 400, 而且不能把事件循环打挂（回归用例）
+    try:
+        bad = socket.create_connection((host, port), timeout=5)
+        if tls:  # HTTPS 服务器上必须先完成 TLS 握手，否则连请求都发不进去
+            bad_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            bad_ctx.check_hostname = False
+            bad_ctx.verify_mode = ssl.CERT_NONE
+            bad = bad_ctx.wrap_socket(bad, server_hostname="localhost")
+        bad.sendall(
+            b"GET /healthz HTTP/1.1\r\nHost: x\r\nContent-Length: abc\r\n\r\n"
+        )
+        reply = bad.recv(200)
+        bad.close()
+    except OSError as exc:
+        reply = b""
+        print(f"    畸形请求异常: {exc!r}")
+    ok &= expect(
+        "畸形 Content-Length -> 400 且服务器仍存活",
+        reply.startswith(b"HTTP/1.1 400") and client_get(host, port, "/healthz", tls=tls)[0] == 200,
+        f"reply={reply[:20]!r}",
+    )
 
     return ok
 
