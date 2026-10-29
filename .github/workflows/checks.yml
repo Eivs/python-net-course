@@ -1,0 +1,46 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static:
+    name: 静态检查 (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Python 语法编译
+        run: python -m compileall -q .
+      - name: Shell 语法
+        run: bash -n run_all.sh
+      - name: 课程链自洽
+        run: python tools/check_lesson_chain.py
+      - name: 隐私底线
+        run: python tools/check_no_local_data.py
+      - name: NOTES 数字一致性
+        run: python tools/check_notes_consistency.py
+
+  smoke:
+    name: 冒烟示例 (无需公网)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # 只跑「不依赖公网、不依赖 macOS 工具」的示例：
+      # 它们能在 Linux CI 上稳定复现，适合当回归网。
+      - name: 运行自包含示例
+        run: |
+          python 01_address_dns/demo_01_ip_address.py
+          python 04_tcp/demo_12_tcp_sticky_packet.py
+          python 05_http/demo_16_mini_http_server.py
+          python 06_project/mini_http_server.py --without-tls
