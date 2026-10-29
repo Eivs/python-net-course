@@ -92,9 +92,10 @@ done < <(printf '%s\n' "$files")
 
 echo
 echo "================= 一致性检查 ================="
-# 三个检查器：课程链（课号/下一课指针/doc 链接）、隐私底线（不把本机信息写进文案）、
-# doc 引文是否有日志出处。任何一项失败都会计入下面的汇总并以非 0 退出。
-for checker in tools/check_lesson_chain.py tools/check_no_local_data.py tools/check_doc_quotes.py; do
+# 四个检查器：课程链（课号/下一课指针/doc 链接）、隐私底线（不把本机信息写进文案）、
+# doc 引文是否有日志出处、NOTES 与正文的关键数字是否一致。
+# 任何一项失败都会计入下面的汇总并以非 0 退出。
+for checker in tools/check_lesson_chain.py tools/check_no_local_data.py tools/check_doc_quotes.py tools/check_notes_consistency.py; do
     [ -f "$checker" ] || continue
     name="$(basename "$checker" .py)"
     if [ "$name" = "check_doc_quotes" ] && [ "${DEGRADED:-0}" = "1" ]; then

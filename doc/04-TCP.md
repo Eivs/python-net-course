@@ -454,6 +454,8 @@ Python 里的表现：`ConnectionResetError`（复位）/ `BrokenPipeError`（�
 
 **一句话**：选项解决的是「已经正确的代码的效率」；不理解语义就调参，只会引入随机故障。
 
+> 选项速查表以 [`../NOTES.md`](../NOTES.md) 第 10 节为唯一维护处；本节只讲实测结果与坑。
+
 ### 【实测】`04_tcp/demo_14_tcp_socket_options.py`
 
 **① 本连接协商出的 MSS**：
@@ -462,7 +464,9 @@ Python 里的表现：`ConnectionResetError`（复位）/ `BrokenPipeError`（�
   连接的 TCP_MAXSEG = 16332 字节
 ```
 
-回环 MTU 16384 − 20（IP）− 20（TCP）≈ 16332。真实以太网上你会看到 1460，
+回环 MTU 16384 − 20（IP）− 20（TCP）= 16344 是理论值；实测 16332 比它小 12 字节，
+是因为本平台协商 MSS 时把 TCP 时间戳选项（12 字节）也算进了头部开销。不同内核算不算选项
+并不统一，以 `getsockopt(TCP_MAXSEG)` 读到的为准。真实以太网上你会看到 1460，
 中间有隧道时可能是 1400/1280。**做自定义协议（如基于 UDP 的 QUIC）时必须自己按它控包大小。**
 
 **② Nagle 与 `TCP_NODELAY`（这次实测结果是反直觉的）**：

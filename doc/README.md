@@ -15,15 +15,16 @@
 | 输出 | `.logs/demo_XX_*.log` | 真实运行结果（本机 19/19 通过），文档里引用的数字都出自这里 |
 | 文档 | `doc/0X-*.md`（你正在看的） | 把「原理 → 代码 → 实测 → 坑 → 练习」串成一条可读的线 |
 | 速查 | `../NOTES.md` | 表格化速查（端口表、状态表、选项表、排障树） |
-| 校验 | `../tools/check_*.py` | 三个检查器：课程链自洽、隐私底线、实测引用有日志出处（只认本次运行清单） |
+| 校验 | `../tools/check_*.py` | 四个检查器：课程链自洽、隐私底线、实测引用有日志出处（只认本次运行清单）、NOTES 与正文的关键数字一致 |
 
 **校验文档自身**（可选，但推荐）：
 
 ```bash
-bash run_all.sh                       # 跑完示例后会依次执行三个检查器
+bash run_all.sh                       # 跑完示例后会依次执行四个检查器
 python3 tools/check_doc_quotes.py     # 校验 doc/ 里的实测引用都有日志出处
 python3 tools/check_no_local_data.py  # 校验文案里没有本机私有信息（本机规则见 tools/privacy_patterns.example）
 python3 tools/check_lesson_chain.py   # 校验课程链（课号、下一课指针）自洽
+python3 tools/check_notes_consistency.py  # 校验 NOTES 与正文的关键数字一致
 ```
 
 **关于隐私**：`doc/` 里引用的实测输出做过两道处理——

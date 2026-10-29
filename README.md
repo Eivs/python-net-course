@@ -89,7 +89,8 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
 - `tools/check_doc_quotes.py` — 校验 `doc/` 里的实测引用都有 `.logs/` 出处（只认本次运行的清单）
 - `tools/check_no_local_data.py` — 校验文案里没有本机私有信息（通用规则入库 + 本机规则不入库）
 - `tools/privacy_patterns.example` — 本机隐私规则模板；复制成 `tools/privacy_patterns.local` 后填入自己的敏感值
-- `run_all.sh` — 顺序跑完所有示例、跑三个检查器、最后汇总（任何一项失败都会非 0 退出）
+- `tools/check_notes_consistency.py` — 校验 NOTES 与正文里的关键数字没有漂移
+- `run_all.sh` — 顺序跑完所有示例、跑四个检查器、最后汇总（任何一项失败都会非 0 退出）
 - `.logs/` — 完整运行输出（不纳入版本管理）；`.logs-degraded/` 是降级模式的输出
 
 ---
@@ -162,7 +163,7 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
    你这台机器特有的值放在 `tools/privacy_patterns.local`——这个文件**不入库**，
    所以「隐私清单」不会反过来变成泄漏。运行时输出本身（`.logs/`）也是你本机的，不入版本管理。
 
-1. **全量回归**：`bash run_all.sh` 一次跑完全部 19 个示例 + 三个一致性检查器 → 全绿；
+1. **全量回归**：`bash run_all.sh` 一次跑完全部 19 个示例 + 四个一致性检查器 → 全绿；
    每个脚本的完整输出都留在 `.logs/`，本次运行清单写在 `.logs/.manifest`，
    `check_doc_quotes` 只拿清单里的日志当证据（不会误用旧日志）。
 2. **关键数字直接读系统**：MTU/MSS 来自 `getsockopt(TCP_MAXSEG)` 与 `ifconfig`；
@@ -195,3 +196,18 @@ python3 04_tcp/demo_12_tcp_sticky_packet.py
 - **协议测试工具**：`tcpdump`/`wireshark`（需要 root，本课用 netstat/lsof 替代）、`wrk`/`hey`
 
 每一课的最后都有「还差什么」清单，指向这些方向。
+
+---
+
+## 持续集成
+
+`.github/workflows/checks.yml` 有两个 job：
+
+- `static`（Python 3.10 / 3.13）：语法编译、`bash -n run_all.sh`、课程链、隐私底线、NOTES 数字一致性。
+- `smoke`：跑四个不依赖公网、也不依赖 macOS 工具的示例（第 1、12、16、19 课）。
+
+`check_doc_quotes` 需要本地生成 `.logs/`（不入库），所以只在本地 `run_all.sh` 里跑。
+
+## 许可证
+
+MIT，见 [`LICENSE`](LICENSE)。

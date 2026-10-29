@@ -16,6 +16,9 @@ check_lesson_chain.py —— 校验课程「链」自洽：课号、文件、下
     3. 那条路径① 文件存在，② 它的课号正好是当前课号 + 1
     4. 课号 1..N 连续、无重复、无缺口（N = 示例总数）
 
+    第 19 课固定是 06_project/mini_http_server.py。学生把这个文件复制到别的
+    目录做实验时，不会被误当成「第二个第 19 课」。
+
 用法：
     python3 tools/check_lesson_chain.py
 退出码：0 = 全部自洽；1 = 有问题（会逐条打印）
@@ -29,6 +32,8 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LESSON_RE = re.compile(r"demo_(\d+)_")
+# 综合项目入口：只有这个路径算第 19 课（避免学生复制出来的副本被误计）
+PROJECT_ENTRY = "06_project/mini_http_server.py"
 TITLE_RE = re.compile(r"第\s*(\d+)\s*课")
 NEXT_RE = re.compile(r"下一课:\s*([0-9A-Za-z_./-]+\.py)")
 
@@ -41,11 +46,13 @@ def collect_lessons() -> list[tuple[int, str]]:
         for name in filenames:
             if not name.endswith(".py"):
                 continue
-            rel = os.path.relpath(os.path.join(dirpath, name), ROOT)
+            rel = os.path.relpath(
+                os.path.join(dirpath, name), ROOT
+            ).replace(os.sep, "/")
             match = LESSON_RE.match(name)
             if match:
                 found.append((int(match.group(1)), rel))
-            elif name == "mini_http_server.py":
+            elif rel == PROJECT_ENTRY:
                 found.append((19, rel))
     return sorted(found)
 
@@ -92,7 +99,11 @@ def main() -> int:
             else:
                 target_name = os.path.basename(target)
                 match = LESSON_RE.match(target_name)
-                target_number = int(match.group(1)) if match else (19 if target_name == "mini_http_server.py" else None)
+                target_number = (
+                    int(match.group(1))
+                    if match
+                    else (19 if target.replace(os.sep, "/") == PROJECT_ENTRY else None)
+                )
                 if target_number != expected_number:
                     problems.append(
                         f"{rel}: 下一课应该指向第 {expected_number} 课，实际指向第 {target_number} 课（{target}）"
