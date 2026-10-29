@@ -34,6 +34,7 @@ demo_03_local_interfaces.py -- 第 3 课：我的机器有几张网卡？（链�
 from __future__ import annotations
 
 import re
+import shutil
 import socket
 import subprocess
 
@@ -43,6 +44,15 @@ def title(text: str) -> None:
     print("=" * 74)
     print(text)
     print("=" * 74)
+
+
+def tool(name: str) -> str | None:
+    """按 PATH 查找外部命令。
+
+    注意：这里故意不用绝对路径。降级模式(DEGRADED=1)会把 PATH 指向空目录，
+    只有走 PATH 查找，才能真的模拟出「这台机器上没有 ifconfig/arp/netstat」。
+    """
+    return shutil.which(name)
 
 
 def run(cmd: list[str], timeout: float = 5.0) -> str:
@@ -68,7 +78,8 @@ def parse_ifconfig() -> list[dict]:
             inet 192.168.1.10 netmask 0xffffff00 broadcast 192.168.1.255
             inet6 fe80::1%en0 prefixlen 64 secured scopeid 0xe
     """
-    text = run(["/sbin/ifconfig", "-a"]) or run(["ifconfig", "-a"])
+    ifconfig = tool("ifconfig")
+    text = run([ifconfig, "-a"]) if ifconfig else ""
     ifaces: list[dict] = []
     current: dict | None = None
 
@@ -211,12 +222,15 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 4 步
     title("第 4 步：ARP 缓存，我最近和哪些局域网邻居说过话")
 
-    arp = run(["/usr/sbin/arp", "-an"]) or run(["arp", "-an"])
+    arp_cmd = tool("arp")
+    arp = run([arp_cmd, "-an"]) if arp_cmd else ""
     if arp:
         lines = [ln for ln in arp.splitlines() if ln.strip()]
         # 先找出默认网关, 再在 ARP 缓存里定位它（网关一定被访问过, 所以一般都在）
         gateway = ""
-        for ln in run(["/usr/sbin/netstat", "-rn", "-f", "inet"]).splitlines():
+        netstat = tool("netstat")
+        routing = run([netstat, "-rn", "-f", "inet"]) if netstat else ""
+        for ln in routing.splitlines():
             parts = ln.split()
             if len(parts) >= 2 and parts[0] == "default":
                 gateway = parts[1]

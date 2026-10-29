@@ -41,6 +41,7 @@ demo_13_tcp_teardown.py -- 第 13 课：连接怎么结束（四次挥手 / TIME
 
 from __future__ import annotations
 
+import shutil
 import socket
 import struct
 import subprocess
@@ -57,9 +58,12 @@ def title(text: str) -> None:
 
 def states_of_port(port: int) -> dict[str, int]:
     """统计某端口在各状态下的条数。"""
+    netstat = shutil.which("netstat")  # 走 PATH: 降级模式下必须真的找不到
+    if not netstat:
+        return {}
     try:
         out = subprocess.run(
-            ["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
+            [netstat, "-an", "-f", "inet", "-p", "tcp"],
             capture_output=True,
             text=True,
             errors="replace",

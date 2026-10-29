@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import socket
 import subprocess
 import threading
@@ -69,14 +70,27 @@ def sh(cmd: list[str], timeout: float = 10.0) -> list[str]:
     return [ln for ln in out.splitlines() if ln.strip()]
 
 
+def tool(name: str) -> str | None:
+    """按 PATH 查找外部命令。
+
+    用绝对路径会让 DEGRADED 模式(PATH 指向空目录)失效 —— 那正是这套课的
+    「没有 lsof/netstat 也能跑」实验，所以这里必须走 PATH。
+    """
+    return shutil.which(name)
+
+
 def listening_sockets() -> list[str]:
     """所有处于 LISTEN 状态的 TCP socket。"""
-    return sh(["/usr/sbin/lsof", "-nP", "-iTCP", "-sTCP:LISTEN"])
+    lsof = tool("lsof")
+    return sh([lsof, "-nP", "-iTCP", "-sTCP:LISTEN"]) if lsof else []
 
 
 def tcp_table() -> list[str]:
     """全部 TCP 连接（含监听）, 用于看状态分布。"""
-    return sh(["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"])
+    netstat = tool("netstat")
+    return (
+        sh([netstat, "-an", "-f", "inet", "-p", "tcp"]) if netstat else []
+    )
 
 
 def main() -> None:

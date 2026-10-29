@@ -187,8 +187,16 @@ def main() -> None:
         probe.settimeout(2)
         try:
             probe.connect((LOCAL_LAN_IP, bound_port))
+            # 理论结论: 绑在 127.0.0.1 上的 socket 不可能被别的网卡地址直接连上。
+            # 如果这里成功了，几乎一定是本机的 TUN/透明代理把 TCP 连接劫持了
+            # （Clash/Surge/企业 VPN 都这么干），而不是「监听范围更宽」。
             print(
-                f"  从 {LOCAL_LAN_IP} 连 {bound_port}: 居然成功（说明监听范围更宽）"
+                f"  从 {LOCAL_LAN_IP} 连 {bound_port}: 成功 —— 但这与预期不符！"
+            )
+            print(
+                "        <- bind 在 127.0.0.1 的 socket 不可能被别的网卡地址直连。\n"
+                "           出现「成功」通常说明本机开了 TUN/透明代理（Clash/Surge/VPN）,\n"
+                "           它把 TCP 连接劫持了。本实验在关闭代理后再跑一次才准确。"
             )
         except OSError as exc:
             print(
@@ -342,13 +350,18 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 7 步
     title("第 7 步：用 netstat 验证（系统视角的五元组）")
 
-    out = subprocess.run(
-        ["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
-        capture_output=True,
-        text=True,
-        errors="replace",
-        timeout=10,
-    ).stdout
+    netstat = shutil.which("netstat")  # 走 PATH: 降级模式下必须真的找不到
+    if netstat:
+        out = subprocess.run(
+            [netstat, "-an", "-f", "inet", "-p", "tcp"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=10,
+        ).stdout
+    else:
+        print("  （本机 PATH 里没有 netstat，跳过系统视角验证）")
+        out = ""
     hits = [ln for ln in out.splitlines() if f".{port}" in ln]
     print(f"  在 `netstat -an -f inet -p tcp` 里搜端口 {port} 得到的行:")
     for ln in hits[:8]:

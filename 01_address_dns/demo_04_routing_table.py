@@ -30,6 +30,7 @@ demo_04_routing_table.py -- 第 4 课：内核怎么决定「这个包从哪张�
 from __future__ import annotations
 
 import ipaddress
+import shutil
 import socket
 import subprocess
 
@@ -39,6 +40,11 @@ def title(text: str) -> None:
     print("=" * 74)
     print(text)
     print("=" * 74)
+
+
+def tool(name: str) -> str | None:
+    """按 PATH 查找外部命令（降级模式下返回 None，从而真的跳过实验）。"""
+    return shutil.which(name)
 
 
 def run(cmd: list[str], timeout: float = 30.0) -> str:
@@ -80,9 +86,8 @@ def main() -> None:
     # ---------------------------------------------------------------- 第 1 步
     title("第 1 步：读真实路由表")
 
-    raw = run(["/usr/sbin/netstat", "-rn", "-f", "inet"]) or run(
-        ["netstat", "-rn", "-f", "inet"]
-    )
+    netstat = tool("netstat")
+    raw = run([netstat, "-rn", "-f", "inet"]) if netstat else ""
     if not raw:
         print("  无法读取路由表，跳过。")
     routes: list[dict] = []
@@ -242,9 +247,10 @@ def main() -> None:
 并回一个 ICMP Time Exceeded; 源端于是知道第 1 跳是谁。然后 TTL=2, 3, ...
 逐跳把整条路径「问」出来。这也是「目的地不可达」之外 ICMP 的另一大用途。
 """)
+    traceroute = tool("traceroute")
     out = run(
         [
-            "/usr/sbin/traceroute",
+            traceroute,
             "-m",
             "8",
             "-q",
@@ -255,7 +261,7 @@ def main() -> None:
             "1.1.1.1",
         ],
         timeout=40,
-    )
+    ) if traceroute else ""
     if out.strip():
         for line in out.strip().splitlines()[:12]:
             print(f"  {line}")

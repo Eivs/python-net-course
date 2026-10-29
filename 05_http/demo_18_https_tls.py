@@ -52,10 +52,12 @@ from __future__ import annotations
 import datetime
 import http.client
 import os
+import shutil
 import socket
 import ssl
 import subprocess
 import threading
+import time
 
 CERT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_tls_demo")
 
@@ -142,13 +144,51 @@ def describe_cert(cert: dict | None, indent: str = "    ") -> None:
 
 
 # ================================================================ 自签证书
+def _cert_still_usable(cert_path: str, key_path: str) -> bool:
+    """已有证书还能用吗？
+
+    这段逻辑是踩坑后补的：证书当初只签了 2 天，两天后再跑本课，
+    「(b) 把自签证书加入信任列表 -> 成功」会变成 `certificate has expired`，
+    整节课的结论就反了。所以复用前必须先确认「证书链能加载 + 没过期」。
+    """
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        return False
+    try:
+        probe = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        probe.load_cert_chain(cert_path, key_path)
+    except (ssl.SSLError, OSError):
+        return False
+    openssl = shutil.which("openssl")
+    if openssl:
+        try:
+            check = subprocess.run(
+                [openssl, "x509", "-checkend", "86400", "-noout", "-in", cert_path],
+                capture_output=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return True
+        return check.returncode == 0
+    # 拿不到 openssl 时只能按文件年龄粗判（20 天）。
+    try:
+        return time.time() - os.path.getmtime(cert_path) < 20 * 86400
+    except OSError:
+        return False
+
+
 def ensure_self_signed_cert() -> tuple[str, str] | None:
-    """用 openssl 生成一张自签证书（含 SAN=localhost/127.0.0.1）。"""
+    """生成（或复用）一张自签证书，含 SAN=localhost/127.0.0.1。"""
     os.makedirs(CERT_DIR, exist_ok=True)
     cert_path = os.path.join(CERT_DIR, "cert.pem")
     key_path = os.path.join(CERT_DIR, "key.pem")
-    if os.path.exists(cert_path) and os.path.exists(key_path):
+    if _cert_still_usable(cert_path, key_path):
         return cert_path, key_path
+    # 过期/损坏的旧证书必须删掉，否则 openssl req 会失败
+    for stale in (cert_path, key_path):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
     cmd = [
         "openssl",
         "req",
@@ -161,7 +201,7 @@ def ensure_self_signed_cert() -> tuple[str, str] | None:
         "-out",
         cert_path,
         "-days",
-        "2",
+        "30",
         "-subj",
         "/CN=localhost/O=python-net-course",
         "-addext",

@@ -4,3 +4,7 @@ __pycache__/
 _tls_demo/
 _demo_static/
 _www/
+
+# 本机隐私规则清单（含真实值，不入库）
+tools/privacy_patterns.local
+.logs-degraded/

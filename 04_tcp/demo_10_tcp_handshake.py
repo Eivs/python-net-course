@@ -47,6 +47,7 @@ demo_10_tcp_handshake.py -- 第 10 课：TCP 三次握手，用代码把它看�
 from __future__ import annotations
 
 import queue
+import shutil
 import socket
 import subprocess
 import threading
@@ -75,9 +76,12 @@ def sysctl_value(name: str) -> str:
 
 def tcp_lines(port: int) -> list[str]:
     """从 netstat 里筛出与本端口相关的行（用于观察状态）。"""
+    netstat = shutil.which("netstat")  # 走 PATH: 降级模式下必须真的找不到
+    if not netstat:
+        return []
     try:
         out = subprocess.run(
-            ["/usr/sbin/netstat", "-an", "-f", "inet", "-p", "tcp"],
+            [netstat, "-an", "-f", "inet", "-p", "tcp"],
             capture_output=True,
             text=True,
             errors="replace",
@@ -151,7 +155,11 @@ def main() -> None:
     port = holder["port"]
 
     print(f"  服务端已 listen 在 127.0.0.1:{port}")
-    print(f"  此刻 netstat 看到的状态: {states_for_port(port)}")
+    initial_states = states_for_port(port)
+    if initial_states:
+        print(f"  此刻 netstat 看到的状态: {initial_states}")
+    else:
+        print("  此刻 netstat 不可用（PATH 里没有），跳过状态观察。")
     print("""
   LISTEN 的含义: 内核在这个 (地址, 端口) 上等着 SYN, 与你是否调用 accept 无关。
   所以「服务已启动但还没 accept」时, 客户端照样能连上, 只是可能在队列里排队。
